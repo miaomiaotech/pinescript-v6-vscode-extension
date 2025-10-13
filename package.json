@@ -118,8 +118,11 @@
     "clean": "rm -rf dist && rm -f build/*.vsix",
     "build": "tsc -p .",
     "watch": "tsc -w -p .",
+    "test": "npm run build && node --test test/*.test.js",
+    "test:lexer": "npm run build && node --test test/lexer.test.js",
+    "test:samples": "npm run build && node test-samples-lexer.js",
     "package": "vsce package --out build/",
-    "rebuild": "npm run clean && npm run build && npm run package"
+    "rebuild": "npm run clean && npm run build && npm test && npm run package"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.19.1",
