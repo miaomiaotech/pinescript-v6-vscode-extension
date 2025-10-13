@@ -1,4 +1,16 @@
-// Pine Script v6 Lexer/Tokenizer
+/**
+ * Pine Script v6 Lexer/Tokenizer
+ *
+ * This lexer performs lexical analysis on Pine Script v6 source code,
+ * converting the raw text into a stream of tokens for parsing.
+ *
+ * Key Features:
+ * - Tracks line and column positions for error reporting
+ * - Handles indentation tracking (spaces and tabs)
+ * - Supports Pine Script v6 syntax including annotations, comments, and color literals
+ * - Recognizes keywords, operators, identifiers, and literals
+ */
+
 export enum TokenType {
   // Literals
   NUMBER = 'NUMBER',
@@ -63,19 +75,32 @@ const KEYWORDS = new Set([
   'to',
 ]);
 
+/**
+ * Lexer class for Pine Script v6
+ *
+ * Usage:
+ * ```typescript
+ * const lexer = new Lexer(sourceCode);
+ * const tokens = lexer.tokenize();
+ * ```
+ */
 export class Lexer {
   private source: string;
-  private pos: number = 0;
-  private line: number = 1;
-  private column: number = 1;
-  private tokens: Token[] = [];
-  private currentIndent: number = 0;  // Track current line's indentation
-  private atLineStart: boolean = true;  // Track if we're at the start of a line
+  private pos: number = 0;           // Current position in source
+  private line: number = 1;          // Current line number (1-indexed)
+  private column: number = 1;        // Current column number (1-indexed)
+  private tokens: Token[] = [];      // Accumulated tokens
+  private currentIndent: number = 0; // Current line's indentation level
+  private atLineStart: boolean = true; // Whether we're at the start of a line
 
   constructor(source: string) {
     this.source = source;
   }
 
+  /**
+   * Tokenize the source code into a list of tokens
+   * @returns Array of tokens including EOF token at the end
+   */
   tokenize(): Token[] {
     while (this.pos < this.source.length) {
       this.scanToken();
@@ -223,7 +248,6 @@ export class Lexer {
 
   private scanComment(): void {
     const start = this.pos - 1;
-    const startColumn = this.column - 1;
 
     // Advance past the second '/'
     this.advance();
@@ -267,6 +291,13 @@ export class Lexer {
     this.addToken(TokenType.COMMENT, value, value.length);
   }
 
+  /**
+   * Scan a string literal (single or double quoted)
+   * Handles escape sequences like \n, \t, \", \'
+   * Supports multi-line strings and Unicode characters (including Chinese)
+   *
+   * @param quote - The quote character (' or ")
+   */
   private scanString(quote: string): void {
     const start = this.pos - 1; // Include the opening quote
 
@@ -296,27 +327,37 @@ export class Lexer {
     this.addToken(TokenType.STRING, value, value.length);
   }
 
+  /**
+   * Scan a number literal
+   * Supports:
+   * - Integers: 123, 0, 999
+   * - Floats: 3.14, 0.5
+   * - Scientific notation: 1.5e10, 2.5e-5, 1E+3
+   */
   private scanNumber(): void {
     const start = this.pos - 1;
 
+    // Integer part
     while (this.isDigit(this.peek())) {
       this.advance();
     }
 
-    // Decimal part
+    // Decimal part (only if followed by digit to avoid confusion with member access)
     if (this.peek() === '.' && this.isDigit(this.peekNext())) {
-      this.advance(); // .
+      this.advance(); // consume '.'
       while (this.isDigit(this.peek())) {
         this.advance();
       }
     }
 
-    // Scientific notation
+    // Scientific notation (e or E)
     if (this.peek() === 'e' || this.peek() === 'E') {
       this.advance();
+      // Optional sign
       if (this.peek() === '+' || this.peek() === '-') {
         this.advance();
       }
+      // Exponent digits
       while (this.isDigit(this.peek())) {
         this.advance();
       }
@@ -326,6 +367,14 @@ export class Lexer {
     this.addToken(TokenType.NUMBER, value, value.length);
   }
 
+  /**
+   * Scan a hexadecimal color literal
+   * Valid formats:
+   * - #RRGGBB (6 hex digits) - RGB color
+   * - #RRGGBBAA (8 hex digits) - RGB with alpha/transparency
+   *
+   * Invalid formats (< 6 or 7 digits, or > 8) are treated as identifiers
+   */
   private scanHexColor(): void {
     const start = this.pos - 1;  // Include the '#'
 
@@ -341,8 +390,7 @@ export class Lexer {
       const value = this.source.substring(start, this.pos);
       this.addToken(TokenType.COLOR, value, value.length);
     } else {
-      // Invalid hex color - treat as error or identifier
-      // For now, just consume it as an identifier-like token
+      // Invalid hex color - treat as identifier for error recovery
       while (this.isAlphaNumeric(this.peek())) {
         this.advance();
       }
@@ -351,9 +399,20 @@ export class Lexer {
     }
   }
 
+  /**
+   * Scan an identifier or keyword
+   * Identifiers must start with a letter or underscore, followed by
+   * letters, digits, or underscores.
+   *
+   * Special handling:
+   * - 'true' and 'false' are recognized as BOOL tokens
+   * - Reserved keywords are recognized as KEYWORD tokens
+   * - Everything else is an IDENTIFIER
+   */
   private scanIdentifier(): void {
     const start = this.pos - 1;
 
+    // Consume identifier characters (letters, digits, underscores)
     while (this.isAlphaNumeric(this.peek()) || this.peek() === '_') {
       this.advance();
     }

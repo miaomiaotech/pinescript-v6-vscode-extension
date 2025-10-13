@@ -1,4 +1,4 @@
-# Pine Script v6 VSCode Extension (Private Fork)
+# Pine Script v6 VSCode Extension
 
 This is a private fork of the Pine Script VSCode Extension, set up for aggressive development with Gemini.
 
