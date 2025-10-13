@@ -772,6 +772,7 @@ export class Parser {
       };
     }
 
+    // na keyword - represents "not available"
     if (this.match([TokenType.KEYWORD, ['na']])) {
       const token = this.previous();
       return {

@@ -51,7 +51,7 @@ export interface Token {
 const KEYWORDS = new Set([
   'if', 'else', 'for', 'while', 'break', 'continue', 'return',
   'var', 'varip', 'const',
-  'na',
+  'na',  // "not available" - indicates a variable has no assigned value
   'export', 'import', 'as',
   'switch', 'case', 'default',
   'type',  // Pine Script v6 custom type definitions
@@ -61,14 +61,6 @@ const KEYWORDS = new Set([
   'series', 'simple', 'input',
   'then',
   'to',
-]);
-
-const BUILTIN_FUNCTIONS = new Set([
-  'indicator', 'strategy', 'library',
-  'plot', 'plotshape', 'plotchar', 'plotcandle', 'plotbar',
-  'hline', 'bgcolor', 'barcolor', 'fill',
-  'label', 'line', 'box', 'table',
-  'alert', 'alertcondition',
 ]);
 
 export class Lexer {

@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(node:*)",
-      "Bash(npm run test:lexer:*)"
+      "Bash(npm run test:lexer:*)",
+      "Bash(npm run test:parser:*)"
     ],
     "deny": [],
     "ask": []
