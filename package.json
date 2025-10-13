@@ -1,0 +1,135 @@
+{
+  "name": "pinescript-v6-extension",
+  "displayName": "Pine Script v6 IDE Tools",
+  "description": "Unofficial Pine Script v6 support for VS Code — IntelliSense, hover docs, and real-time validation with 100% language coverage.",
+  "publisher": "jpantsjoha",
+  "author": {
+    "name": "Jaroslav Pantsjoha",
+    "url": "https://github.com/jpantsjoha"
+  },
+  "version": "0.4.4",
+  "icon": "images/pinescript-extension.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jpantsjoha/pinescript-vscode-extension.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jpantsjoha/pinescript-vscode-extension/issues"
+  },
+  "homepage": "https://github.com/jpantsjoha/pinescript-vscode-extension#readme",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.88.0"
+  },
+  "galleryBanner": {
+    "color": "#0E1626",
+    "theme": "dark"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Snippets"
+  ],
+  "keywords": [
+    "pine",
+    "pinescript",
+    "pine-script",
+    "tradingview",
+    "trading",
+    "indicators",
+    "strategies",
+    "syntax",
+    "intellisense",
+    "diagnostics",
+    "v6"
+  ],
+  "activationEvents": [
+    "onLanguage:pine"
+  ],
+  "main": "./dist/src/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "pine.validate",
+        "title": "Pine: Validate current file"
+      },
+      {
+        "command": "pine.showDocs",
+        "title": "Pine: Show docs for symbol"
+      }
+    ],
+    "configuration": {
+      "title": "Pine Script Extension",
+      "properties": {
+        "pine.docsMode": {
+          "type": "string",
+          "default": "full",
+          "enum": [
+            "full",
+            "summary"
+          ],
+          "description": "Controls whether hovers/completions show full docs or a brief summary."
+        },
+        "pine.applyFileAssociation": {
+          "type": "boolean",
+          "default": true,
+          "description": "On activation, ensure files.associations maps *.pine to the pine language."
+        },
+        "pine.httpSuggestions.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable HTTP suggestion hook for AI completions."
+        },
+        "pine.httpSuggestions.endpoint": {
+          "type": "string",
+          "default": "https://localhost:11434/suggest",
+          "description": "HTTP(S) endpoint for suggestion provider."
+        },
+        "pine.httpSuggestions.timeoutMs": {
+          "type": "number",
+          "default": 1200,
+          "description": "Request timeout in milliseconds."
+        }
+      }
+    },
+    "languages": [
+      {
+        "id": "pine",
+        "aliases": [
+          "Pine",
+          "Pine Script",
+          "pine"
+        ],
+        "extensions": [
+          ".pine"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "pine",
+        "scopeName": "source.pine",
+        "path": "./syntaxes/pine.tmLanguage.json"
+      }
+    ]
+  },
+  "scripts": {
+    "clean": "rm -rf dist && rm -f build/*.vsix",
+    "build": "tsc -p .",
+    "watch": "tsc -w -p .",
+    "package": "vsce package --out build/",
+    "rebuild": "npm run clean && npm run build && npm run package"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.19.1",
+    "@types/node": "^20.11.30",
+    "@types/vscode": "^1.88.0",
+    "cheerio": "^1.1.2",
+    "playwright": "^1.48.0",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "glob": "^11.0.3"
+  }
+}
