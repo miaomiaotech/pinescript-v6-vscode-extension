@@ -72,6 +72,19 @@ describe('AST 解析器 - 变量声明', () => {
     assert.strictEqual(varDecl.init.value, 10);
   });
 
+  test('解构赋值', () => {
+    const ast = parse('[kdj_top, kdj_bottom] = detect_high_low(k_value, 80, 20, 50, true)');
+    const simplified = simplifyNode(ast);
+
+    assert.strictEqual(simplified.body.length, 1);
+    const destructuring = simplified.body[0];
+    assert.strictEqual(destructuring.type, 'DestructuringAssignment');
+    assert.deepStrictEqual(destructuring.names, ['kdj_top', 'kdj_bottom']);
+    assert.strictEqual(destructuring.init.type, 'CallExpression');
+    assert.strictEqual(destructuring.init.callee.name, 'detect_high_low');
+    assert.strictEqual(destructuring.init.arguments.length, 5);
+  });
+
   test('var 关键字声明', () => {
     const ast = parse('var x = 10');
     const simplified = simplifyNode(ast);

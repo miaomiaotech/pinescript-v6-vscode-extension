@@ -17,6 +17,12 @@ export class AstVisitor {
             case 'VariableDeclaration':
                 this.visitVariableDeclaration(node as AST.VariableDeclaration);
                 break;
+            case 'DestructuringAssignment':
+                this.visitDestructuringAssignment(node as AST.DestructuringAssignment);
+                break;
+            case 'AssignmentStatement':
+                this.visitAssignmentStatement(node as AST.AssignmentStatement);
+                break;
             case 'FunctionDeclaration':
                 this.visitFunctionDeclaration(node as AST.FunctionDeclaration);
                 break;
@@ -123,6 +129,42 @@ export class AstVisitor {
         }
     }
 
+    private visitDestructuringAssignment(node: AST.DestructuringAssignment) {
+        // Define all variables in the destructuring pattern
+        for (const variable of node.variables) {
+            const symbol: Symbol = {
+                name: variable.name,
+                type: 'unknown',
+                line: variable.line,
+                column: variable.column,
+                used: false,
+                kind: 'variable',
+                declaredWith: null,
+                references: [],
+            };
+            this.symbolTable.define(symbol);
+        }
+
+        // Visit the initialization expression
+        if (node.init) {
+            this.visit(node.init);
+        }
+    }
+
+    private visitAssignmentStatement(node: AST.AssignmentStatement) {
+        // Look up the symbol and add a reference without marking as used
+        const symbol = this.symbolTable.lookup(node.name);
+        if (symbol) {
+            // Add reference but don't mark as used (assignments are writes, not reads)
+            symbol.references.push(node.range);
+        }
+
+        // Visit the value expression (right-hand side)
+        if (node.value) {
+            this.visit(node.value);
+        }
+    }
+
     private visitFunctionDeclaration(node: AST.FunctionDeclaration) {
         const symbol: Symbol = {
             name: node.name,
@@ -143,8 +185,8 @@ export class AstVisitor {
             const paramSymbol: Symbol = {
                 name: p.name,
                 type: 'unknown',
-                line: node.line, // Parameter line number is the same as the function
-                column: node.column,
+                line: p.line,
+                column: p.column,
                 used: false,
                 kind: 'parameter',
                 references: [],

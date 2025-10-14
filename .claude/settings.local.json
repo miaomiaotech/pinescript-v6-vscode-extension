@@ -3,7 +3,9 @@
     "allow": [
       "Bash(node:*)",
       "Bash(npm run test:lexer:*)",
-      "Bash(npm run test:parser:*)"
+      "Bash(npm run test:parser:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run:*)"
     ],
     "deny": [],
     "ask": []

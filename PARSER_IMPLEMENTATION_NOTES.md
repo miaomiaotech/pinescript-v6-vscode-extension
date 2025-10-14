@@ -274,6 +274,51 @@ if (nextToken.type !== TokenType.NEWLINE && nextToken.line === startToken.line) 
 }
 ```
 
+### 5. 解构赋值
+Pine Script 支持数组解构赋值，用于函数返回多个值：
+```pine
+[kdj_top, kdj_bottom] = detect_high_low(k_value, 80, 20, 50, true)
+```
+
+实现使用回溯模式识别解构赋值：
+```typescript
+// Check for destructuring assignment: [name1, name2] = expr
+if (this.check(TokenType.LBRACKET)) {
+  const checkpoint = this.current;
+  try {
+    this.advance(); // consume [
+
+    // Try to parse identifier list
+    const names: string[] = [];
+    if (!this.check(TokenType.RBRACKET)) {
+      do {
+        if (this.check(TokenType.IDENTIFIER)) {
+          names.push(this.advance().value);
+        } else {
+          throw new Error('Expected identifier in destructuring pattern');
+        }
+      } while (this.match(TokenType.COMMA));
+    }
+
+    this.consume(TokenType.RBRACKET, 'Expected "]" in destructuring pattern');
+
+    // Check for = after the pattern
+    if (this.match(TokenType.ASSIGN)) {
+      // This is a destructuring assignment!
+      return this.destructuringAssignment(names, startToken);
+    }
+
+    // Not a destructuring assignment, backtrack
+    this.current = checkpoint;
+  } catch (e) {
+    // Not a destructuring assignment, backtrack
+    this.current = checkpoint;
+  }
+}
+```
+
+⚠️ **注意**: 解构赋值必须在数组字面量检测之前，否则会被误认为数组表达式。
+
 ## 常见陷阱
 
 ### ❌ 错误实践
@@ -338,12 +383,13 @@ this.reportError(errorMsg);  // ✅
 
 ### 必须测试的场景
 1. **基本语句**: 变量声明、赋值、表达式
-2. **控制流**: if/else、for、while
-3. **函数**: 声明、调用、命名参数
-4. **表达式**: 运算符优先级、嵌套调用
-5. **缩进**: 正确的缩进块、缩进变化
-6. **错误恢复**: 语法错误后继续解析
-7. **边界情况**: 空程序、只有注释、单行函数
+2. **解构赋值**: 数组解构、多个变量同时赋值
+3. **控制流**: if/else、for、while
+4. **函数**: 声明、调用、命名参数
+5. **表达式**: 运算符优先级、嵌套调用
+6. **缩进**: 正确的缩进块、缩进变化
+7. **错误恢复**: 语法错误后继续解析
+8. **边界情况**: 空程序、只有注释、单行函数
 
 ### 测试工具
 ```bash

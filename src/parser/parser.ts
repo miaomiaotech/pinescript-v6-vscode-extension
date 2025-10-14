@@ -77,6 +77,12 @@ export class Parser {
   }
 
   private statement(): AST.Statement | null {
+    // Skip newlines at statement level
+    if (this.check(TokenType.NEWLINE)) {
+      this.advance();
+      return null;
+    }
+
     // Skip annotations
     if (this.check(TokenType.ANNOTATION)) {
       this.advance();
@@ -164,6 +170,9 @@ export class Parser {
             const startToken = this.tokens[funcDeclCheckpoint];
             return this.functionDeclaration(nameToken, params, isExport, startToken);
           }
+
+          // No arrow after ), not a function definition, backtrack
+          this.current = funcDeclCheckpoint;
         } catch (e) {
           // Not a function definition, backtrack
           this.current = funcDeclCheckpoint;
@@ -177,10 +186,75 @@ export class Parser {
         this.current = funcDeclCheckpoint;
     }
 
-    // Check if it's an identifier followed by = (variable declaration without var)
+    // Check if it's an identifier followed by = or :=
     if (this.check(TokenType.IDENTIFIER) && this.peekNext()?.type === TokenType.ASSIGN) {
+      const nameToken = this.peek();
+      this.advance(); // consume identifier
+      const assignToken = this.advance(); // consume = or :=
+
+      // If it's :=, this is reassignment (not declaration)
+      if (assignToken.value === ':=') {
+        const value = this.expression();
+        const endToken = this.previous();
+        return {
+          type: 'AssignmentStatement',
+          name: nameToken.value,
+          nameLine: nameToken.line,
+          nameColumn: nameToken.column,
+          value,
+          line: nameToken.line,
+          column: nameToken.column,
+          range: new Range(this.tokenRange(nameToken).start, this.tokenRange(endToken).end),
+        };
+      }
+
+      // If it's =, this is a variable declaration
+      // Backtrack and let variableDeclaration handle it
+      this.current -= 2;
       const startToken = this.peek();
       return this.variableDeclaration(null, startToken);
+    }
+
+    // Check for destructuring assignment: [name1, name2] = expr
+    if (this.check(TokenType.LBRACKET)) {
+      const checkpoint = this.current;
+      try {
+        const startToken = this.peek();
+        this.advance(); // consume [
+
+        // Try to parse identifier list with position info
+        const names: string[] = [];
+        const variables: AST.DestructuringVariable[] = [];
+        if (!this.check(TokenType.RBRACKET)) {
+          do {
+            if (this.check(TokenType.IDENTIFIER)) {
+              const nameToken = this.advance();
+              names.push(nameToken.value);
+              variables.push({
+                name: nameToken.value,
+                line: nameToken.line,
+                column: nameToken.column,
+              });
+            } else {
+              throw new Error('Expected identifier in destructuring pattern');
+            }
+          } while (this.match(TokenType.COMMA));
+        }
+
+        this.consume(TokenType.RBRACKET, 'Expected "]" in destructuring pattern');
+
+        // Check for = after the pattern
+        if (this.match(TokenType.ASSIGN)) {
+          // This is a destructuring assignment!
+          return this.destructuringAssignment(names, variables, startToken);
+        }
+
+        // Not a destructuring assignment, backtrack
+        this.current = checkpoint;
+      } catch (e) {
+        // Not a destructuring assignment, backtrack
+        this.current = checkpoint;
+      }
     }
 
     // Expression statement (function calls, etc.)
@@ -210,6 +284,21 @@ export class Parser {
     };
   }
 
+  private destructuringAssignment(names: string[], variables: AST.DestructuringVariable[], startToken: Token): AST.DestructuringAssignment {
+    const init = this.expression();
+    const endToken = this.previous();
+
+    return {
+      type: 'DestructuringAssignment',
+      names,
+      variables,
+      init,
+      line: startToken.line,
+      column: startToken.column,
+      range: new Range(this.tokenRange(startToken).start, this.tokenRange(endToken).end),
+    };
+  }
+
   private expressionStatement(): AST.ExpressionStatement {
     const expr = this.expression();
     return {
@@ -232,8 +321,18 @@ export class Parser {
 
     if (this.match([TokenType.KEYWORD, ['else']])) {
       const elseToken = this.previous();
-      alternate = this.parseIndentedBlock(elseToken);
-      endToken = this.previous();
+
+      // Check for "else if" - if so, parse as a single nested if statement
+      if (this.check([TokenType.KEYWORD, ['if']])) {
+        const ifToken = this.advance();
+        const nestedIf = this.ifStatement(ifToken);
+        alternate = [nestedIf];
+        endToken = this.previous();
+      } else {
+        // Regular else block
+        alternate = this.parseIndentedBlock(elseToken);
+        endToken = this.previous();
+      }
     }
 
     return {
@@ -388,6 +487,8 @@ export class Parser {
 
       params.push({
         name: paramName.value,
+        line: paramName.line,
+        column: paramName.column,
         typeAnnotation,
         defaultValue,
       });

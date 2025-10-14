@@ -15,6 +15,8 @@ export interface Program extends ASTNode {
 
 export type Statement =
   | VariableDeclaration
+  | DestructuringAssignment
+  | AssignmentStatement
   | FunctionDeclaration
   | ExpressionStatement
   | IfStatement
@@ -32,6 +34,27 @@ export interface VariableDeclaration extends ASTNode {
   typeAnnotation?: TypeAnnotation;
 }
 
+export interface DestructuringVariable {
+  name: string;
+  line: number;
+  column: number;
+}
+
+export interface DestructuringAssignment extends ASTNode {
+  type: 'DestructuringAssignment';
+  names: string[]; // Array of variable names: [kdj_top, kdj_bottom]
+  variables: DestructuringVariable[]; // Array with position info for each variable
+  init: Expression; // Right-hand side expression
+}
+
+export interface AssignmentStatement extends ASTNode {
+  type: 'AssignmentStatement';
+  name: string; // Variable name being assigned
+  nameLine: number;
+  nameColumn: number;
+  value: Expression; // Right-hand side expression
+}
+
 export interface FunctionDeclaration extends ASTNode {
   type: 'FunctionDeclaration';
   name: string;
@@ -43,6 +66,8 @@ export interface FunctionDeclaration extends ASTNode {
 
 export interface FunctionParam {
   name: string;
+  line: number;
+  column: number;
   typeAnnotation?: TypeAnnotation;
   defaultValue?: Expression;
 }

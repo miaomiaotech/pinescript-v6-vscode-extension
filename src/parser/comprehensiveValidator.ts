@@ -406,43 +406,39 @@ export class ComprehensiveValidator {
       }
 
       this.symbolTable.define(symbol);
-    } else if (statement.type === 'FunctionDeclaration') {
-      // First, collect declarations from function body (needed for type inference)
-      this.symbolTable.enterScope();
-
-      // Add parameters to scope
-      // Infer parameter types based on common patterns
-      for (let i = 0; i < statement.params.length; i++) {
-        const param = statement.params[i];
-        // First parameter often series data (x, src, val, etc.)
-        // Other parameters often int (length, period, n, etc.)
-        const paramType = i === 0 ? 'series<float>' : 'int';
-        this.symbolTable.define({
-          name: param.name,
-          type: paramType,
-          line: statement.line,
-          column: statement.column,
+    } else if (statement.type === 'DestructuringAssignment') {
+      // Handle destructuring assignment: [a, b] = expr
+      for (const variable of statement.variables) {
+        const symbol: SymbolInfo = {
+          name: variable.name,
+          type: 'unknown',
+          line: variable.line,
+          column: variable.column,
           used: false,
-          kind: 'parameter',
+          kind: 'variable',
           declaredWith: null,
           references: [],
-        });
+        };
+
+        // Try to infer type from initialization
+        // For now, we can't easily infer individual element types from destructuring
+        // This would require analyzing the return type of the function call
+        if (statement.init) {
+          const initType = this.inferExpressionType(statement.init);
+          // If the init is a function returning a tuple or array, we'd need to extract element types
+          // For now, mark as unknown
+          symbol.type = 'unknown';
+        }
+
+        this.symbolTable.define(symbol);
       }
-
-      // Collect declarations from function body
-      for (const stmt of statement.body) {
-        this.collectDeclarations(stmt);
-      }
-
-      // NOW infer return type (with body variables in scope)
-      const returnType = this.inferFunctionReturnType(statement);
-
-      this.symbolTable.exitScope();
-
-      // Define the function in parent scope
+    } else if (statement.type === 'FunctionDeclaration') {
+      // Don't create scope here - will be done in validateStatement
+      // Just define the function symbol in the current (parent) scope
+      // Return type will be 'unknown' for now (can be inferred later if needed)
       const symbol: SymbolInfo = {
         name: statement.name,
-        type: returnType,
+        type: 'unknown', // Will be properly inferred during validation
         line: statement.line,
         column: statement.column,
         used: false,
@@ -473,12 +469,58 @@ export class ComprehensiveValidator {
         }
         break;
 
+      case 'DestructuringAssignment':
+        // Validate the initialization expression
+        this.validateExpression(statement.init);
+        break;
+
+      case 'AssignmentStatement':
+        // Check that variable exists
+        const assignSymbol = this.symbolTable.lookup(statement.name);
+        if (!assignSymbol) {
+          this.addError(
+            statement.nameLine,
+            statement.nameColumn,
+            statement.name.length,
+            `Undefined variable '${statement.name}'`,
+            DiagnosticSeverity.Error
+          );
+        } else {
+          // Add reference but don't mark as used
+          // This allows us to detect variables that are only written to but never read
+          assignSymbol.references.push(statement.range);
+        }
+        // Validate the value expression
+        this.validateExpression(statement.value);
+        break;
+
       case 'ExpressionStatement':
         this.validateExpression(statement.expression);
         break;
 
       case 'FunctionDeclaration':
         this.symbolTable.enterScope();
+
+        // Re-add parameters to scope (they were added during collectDeclarations, but we exited that scope)
+        for (let i = 0; i < statement.params.length; i++) {
+          const param = statement.params[i];
+          const paramType = i === 0 ? 'series<float>' : 'int';
+          this.symbolTable.define({
+            name: param.name,
+            type: paramType,
+            line: param.line,
+            column: param.column,
+            used: false,
+            kind: 'parameter',
+            declaredWith: null,
+            references: [],
+          });
+        }
+
+        // Re-collect declarations from function body (they were collected during collectDeclarations, but we exited that scope)
+        for (const stmt of statement.body) {
+          this.collectDeclarations(stmt);
+        }
 
         // Validate function body
         for (const stmt of statement.body) {
@@ -661,6 +703,11 @@ export class ComprehensiveValidator {
     // First, validate the callee expression itself to mark it as used
     this.validateExpression(call.callee);
 
+    // Always validate argument expressions (marks variables as used)
+    for (const arg of call.arguments) {
+      this.validateExpression(arg.value);
+    }
+
     // Get function name
     let functionName = '';
     if (call.callee.type === 'Identifier') {
@@ -678,16 +725,12 @@ export class ComprehensiveValidator {
     const signature = this.functionSignatures.get(functionName);
     if (!signature) {
       // Unknown function - could be user-defined
+      // We already validated argument expressions above
       return;
     }
 
-    // Validate arguments
+    // Validate arguments against signature
     this.validateFunctionArguments(call, functionName, signature);
-
-    // Validate argument expressions
-    for (const arg of call.arguments) {
-      this.validateExpression(arg.value);
-    }
   }
 
   private validateFunctionArguments(
@@ -1102,16 +1145,31 @@ export class ComprehensiveValidator {
 
   private checkUnusedVariables(): void {
     const unused = this.symbolTable.getAllUnusedSymbols();
+
     for (const symbol of unused) {
       // Don't flag built-in variables (line === 0)
       if (symbol.line === 0) {
         continue;
       }
 
+      // Don't flag variables starting with _ (convention for intentionally unused)
+      if (symbol.name.startsWith('_')) {
+        continue;
+      }
+
+      // Don't flag exported function parameters
+      // (These are part of the public API and may not be used internally)
+      if (symbol.kind === 'parameter') {
+        // Skip - function parameters being unused might be intentional
+        // especially for exported functions or functions with default implementations
+        continue;
+      }
+
+      const nameLength = symbol.name.length;
       this.addError(
         symbol.line,
         symbol.column,
-        symbol.name.length,
+        nameLength,
         `Variable '${symbol.name}' is declared but never used.`,
         DiagnosticSeverity.Hint,
         ErrType.Unused,
