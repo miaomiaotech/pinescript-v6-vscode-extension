@@ -43,10 +43,6 @@ function parseParameters(syntax: string): ParsedParameter[] {
 
 // Parse individual parameter
 function parseParameter(param: string): ParsedParameter {
-  // Remove default values and type annotations for display
-  const cleanParam = param.split('=')[0].trim();
-  const paramName = cleanParam.split(':')[0].trim();
-
   return {
     label: param,
     documentation: undefined  // Could be enhanced with per-parameter docs

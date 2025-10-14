@@ -161,7 +161,6 @@ export class Lexer {
   }
 
   private scanToken(): void {
-    const start = this.pos;
     const char = this.advance();
 
     // Check for single-character tokens first

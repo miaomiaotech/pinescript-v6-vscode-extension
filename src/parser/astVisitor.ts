@@ -1,4 +1,4 @@
-import { Position, Range } from 'vscode';
+import { Position } from 'vscode';
 import * as AST from './ast';
 import { SymbolTable, Symbol, Scope } from './symbolTable';
 

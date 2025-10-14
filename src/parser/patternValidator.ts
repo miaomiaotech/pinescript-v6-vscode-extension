@@ -8,13 +8,11 @@ import * as vscode from 'vscode';
 import { PINE_FUNCTIONS_MERGED as ALL_FUNCTION_SIGNATURES } from '../../v6/parameter-requirements-merged';
 import { isValidNamespaceMember, CONSTANT_NAMESPACES } from '../../v6/pine-constants-complete';
 import {
-  STANDALONE_BUILTINS,
   VARIABLE_NAMESPACES,
   FUNCTION_NAMESPACES,
   KEYWORDS,
   TYPE_NAMES,
-  isBuiltInVariable as isBuiltIn,
-  isKnownNamespace
+  isBuiltInVariable as isBuiltIn
 } from '../../v6/pine-builtins-complete';
 
 export interface ValidationError {

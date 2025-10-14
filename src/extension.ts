@@ -4,8 +4,7 @@ import * as https from 'https';
 import {
   getAllCompletions,
   getNamespaceCompletions,
-  getHoverInfo,
-  createCompletionItem
+  getHoverInfo
 } from './completions';
 import { createSignatureHelpProvider } from './signatureHelp';
 import { Parser } from './parser/parser';

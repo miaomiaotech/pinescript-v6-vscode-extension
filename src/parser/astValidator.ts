@@ -3,7 +3,7 @@ import { Program, Statement, Expression, CallExpression, CallArgument, Identifie
 import { V6_FUNCTIONS, V6_NAMESPACES, PineItem } from '../../v6/v6-manual';
 import { PINE_FUNCTIONS_MERGED } from '../../v6/parameter-requirements-merged';
 import type { FunctionSignatureSpec, FunctionParameter } from '../../v6/parameter-requirements-generated';
-import { PineType, TypeChecker, TypeInfo } from './typeSystem';
+import { PineType, TypeChecker } from './typeSystem';
 import { SymbolTable, Symbol as SymbolInfo } from './symbolTable';
 
 export enum DiagnosticSeverity {
@@ -423,12 +423,9 @@ export class AstValidator {
         // Try to infer type from initialization
         // For now, we can't easily infer individual element types from destructuring
         // This would require analyzing the return type of the function call
-        if (statement.init) {
-          const initType = this.inferExpressionType(statement.init);
-          // If the init is a function returning a tuple or array, we'd need to extract element types
-          // For now, mark as unknown
-          symbol.type = 'unknown';
-        }
+        // If the init is a function returning a tuple or array, we'd need to extract element types
+        // For now, mark as unknown
+        symbol.type = 'unknown';
 
         this.symbolTable.define(symbol);
       }
@@ -754,7 +751,6 @@ export class AstValidator {
     }
 
     // Check argument count
-    const requiredCount = signature.parameters.filter(p => !p.optional).length;
     const totalCount = signature.parameters.length;
 
     // Check if function is variadic (accepts variable arguments)

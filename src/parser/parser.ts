@@ -135,7 +135,7 @@ export class Parser {
     // Type-annotated variable declaration without var: int x = 1, float y = 2.0
     if (this.check([TokenType.KEYWORD, [...TYPE_KEYWORDS]])) {
       const checkpoint = this.current;
-      const typeKeyword = this.advance(); // consume type keyword
+      this.advance(); // consume type keyword
 
       // Check if next token is identifier followed by =
       if (this.check(TokenType.IDENTIFIER) && this.peekNext()?.type === TokenType.ASSIGN) {
