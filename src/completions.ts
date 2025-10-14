@@ -173,9 +173,6 @@ export function getAllCompletions(): vscode.CompletionItem[] {
 
 // Get hover information for a symbol
 export function getHoverInfo(symbol: string): vscode.Hover | undefined {
-  const cfg = vscode.workspace.getConfiguration('pine');
-  const mode = cfg.get<'full' | 'summary'>('docsMode', 'full');
-
   // Check variables
   let item: PineItem | undefined = V6_VARIABLES[symbol];
 
@@ -206,12 +203,9 @@ export function getHoverInfo(symbol: string): vscode.Hover | undefined {
     md.appendMarkdown('\n\n');
   }
 
-  // Add description (full or summary based on settings)
+  // Add description
   if (item.description) {
-    const desc = mode === 'summary'
-      ? item.description.split('.')[0] + '.'
-      : item.description;
-    md.appendMarkdown(desc);
+    md.appendMarkdown(item.description);
   }
 
   // Add return type/type
@@ -221,8 +215,8 @@ export function getHoverInfo(symbol: string): vscode.Hover | undefined {
     md.appendMarkdown(`\n\n**Type:** \`${item.type}\``);
   }
 
-  // Add example in full mode
-  if (mode === 'full' && item.example) {
+  // Add example
+  if (item.example) {
     md.appendMarkdown('\n\n**Example:**\n\n');
     md.appendCodeblock(item.example, 'pine');
   }

@@ -1,0 +1,25 @@
+<svg width="512" height="512" xmlns="http://www.w3.org/2000/svg">
+
+ <g>
+  <g>
+    <path fill="#2d6e4f" d="M256,40 L470,400 L42,400 L256,40 Z"/>
+    
+    <g stroke-linejoin="round" stroke-linecap="round" fill="white" stroke-width="10" stroke="white">
+     <line y1="350" x1="77" y2="260" x2="185"/>
+     <line y1="260" x1="185" y2="300" x2="256"/>
+     <line y1="300" x1="256" y2="200" x2="330"/>
+     
+     <!-- <circle r="10" cy="281" cx="93"/> -->
+     <circle r="10" cy="260" cx="185"/>
+     <circle r="10" cy="300" cx="256"/>
+     <circle r="10" cy="200" cx="330"/>
+    </g>
+    
+    <text letter-spacing="-2" fill="white" 
+      font-weight="normal" font-size="80" font-family="Arial Black, Arial, sans-serif" 
+      y="480" x="30">Pine Script</text>
+    
+    <text fill="white" font-weight="normal" font-size="65" font-family="Arial, sans-serif" y="386" x="225">v6</text>
+  </g>
+ </g>
+</svg>

@@ -1,22 +1,22 @@
 {
-  "name": "pinescript-v6-extension",
-  "displayName": "Pine Script v6 IDE Tools",
-  "description": "Unofficial Pine Script v6 support for VS Code — IntelliSense, hover docs, and real-time validation with 100% language coverage.",
-  "publisher": "jpantsjoha",
+  "name": "pinescript-language-v6",
+  "displayName": "Pine Script Language v6",
+  "description": "Pine Script language v6 support for VS Code, including syntax highlighting, IntelliSense, and diagnostics.",
+  "publisher": "weaming",
   "author": {
-    "name": "Jaroslav Pantsjoha",
-    "url": "https://github.com/jpantsjoha"
+    "name": "Garden Yuen",
+    "url": "https://github.com/weaming"
   },
-  "version": "0.4.4",
-  "icon": "images/pinescript-extension.png",
+  "version": "0.0.1",
+  "icon": "icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/jpantsjoha/pinescript-vscode-extension.git"
+    "url": "https://github.com/miaomiaotech/pinescript-v6-vscode-extension.git"
   },
   "bugs": {
-    "url": "https://github.com/jpantsjoha/pinescript-vscode-extension/issues"
+    "url": "https://github.com/miaomiaotech/pinescript-v6-vscode-extension/issues"
   },
-  "homepage": "https://github.com/jpantsjoha/pinescript-vscode-extension#readme",
+  "homepage": "https://github.com/miaomiaotech/pinescript-v6-vscode-extension",
   "license": "MIT",
   "engines": {
     "vscode": "^1.88.0"
@@ -61,15 +61,6 @@
     "configuration": {
       "title": "Pine Script Extension",
       "properties": {
-        "pine.docsMode": {
-          "type": "string",
-          "default": "full",
-          "enum": [
-            "full",
-            "summary"
-          ],
-          "description": "Controls whether hovers/completions show full docs or a brief summary."
-        },
         "pine.applyFileAssociation": {
           "type": "boolean",
           "default": true,
@@ -117,8 +108,7 @@
   "scripts": {
     "clean": "rm -rf dist && rm -rf build",
     "build": "node esbuild.js",
-    "build:tsc": "tsc -p .",
-    "watch": "tsc -p -w .",
+    "watch": "tsc -w -p .",
     "package": "npm run clean && npm run build && mkdir -p build && vsce package --no-dependencies -o build/pinescript-v6-extension.vsix"
   },
   "devDependencies": {
@@ -126,8 +116,11 @@
     "@types/node": "^20.11.30",
     "@types/vscode": "^1.88.0",
     "cheerio": "^1.1.2",
+    "esbuild": "^0.25.10",
     "playwright": "^1.48.0",
-    "typescript": "^5.4.5"
+    "sharp": "^0.34.4",
+    "typescript": "^5.4.5",
+    "vsce": "^2.15.0"
   },
   "dependencies": {
     "glob": "^11.0.3"
