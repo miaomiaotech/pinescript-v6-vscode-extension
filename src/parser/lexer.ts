@@ -30,7 +30,6 @@ export enum TokenType {
   DIVIDE = 'DIVIDE',           // /
   MODULO = 'MODULO',           // %
   COMPARE = 'COMPARE',         // ==, !=, <, >, <=, >=
-  LOGICAL = 'LOGICAL',         // and, or, not
   TERNARY = 'TERNARY',         // ?
 
   // Delimiters
@@ -49,6 +48,7 @@ export enum TokenType {
   ANNOTATION = 'ANNOTATION',   // //@version=6
   EOF = 'EOF',
   WHITESPACE = 'WHITESPACE',
+  ERROR = 'ERROR',             // Lexical errors
 }
 
 export interface Token {
@@ -58,6 +58,15 @@ export interface Token {
   column: number;
   length: number;
   indent?: number;  // Indentation level (number of spaces at line start)
+  endLine?: number;    // End line number (for multi-line tokens)
+  endColumn?: number;  // End column number
+}
+
+export interface LexerError {
+  message: string;
+  line: number;
+  column: number;
+  length: number;
 }
 
 const KEYWORDS = new Set([
@@ -75,6 +84,21 @@ const KEYWORDS = new Set([
   'to',
 ]);
 
+// Map of single-character tokens for cleaner code
+const SINGLE_CHAR_TOKENS = new Map<string, TokenType>([
+  ['(', TokenType.LPAREN],
+  [')', TokenType.RPAREN],
+  ['[', TokenType.LBRACKET],
+  [']', TokenType.RBRACKET],
+  [',', TokenType.COMMA],
+  ['.', TokenType.DOT],
+  ['?', TokenType.TERNARY],
+  ['+', TokenType.PLUS],
+  ['-', TokenType.MINUS],
+  ['*', TokenType.MULTIPLY],
+  ['%', TokenType.MODULO],
+]);
+
 /**
  * Lexer class for Pine Script v6
  *
@@ -90,11 +114,16 @@ export class Lexer {
   private line: number = 1;          // Current line number (1-indexed)
   private column: number = 1;        // Current column number (1-indexed)
   private tokens: Token[] = [];      // Accumulated tokens
+  private errors: LexerError[] = []; // Accumulated lexical errors
   private currentIndent: number = 0; // Current line's indentation level
   private atLineStart: boolean = true; // Whether we're at the start of a line
+  private tabWidth: number = 4;      // Configurable tab width
 
-  constructor(source: string) {
+  constructor(source: string, options?: { tabWidth?: number }) {
     this.source = source;
+    if (options?.tabWidth) {
+      this.tabWidth = options.tabWidth;
+    }
   }
 
   /**
@@ -109,17 +138,45 @@ export class Lexer {
     return this.tokens;
   }
 
+  /**
+   * Get all lexical errors encountered during tokenization
+   * @returns Array of lexical errors
+   */
+  getErrors(): LexerError[] {
+    return this.errors;
+  }
+
+  /**
+   * Report a lexical error
+   * @param message - Error message
+   * @param length - Length of the error token
+   */
+  private reportError(message: string, length: number = 1): void {
+    this.errors.push({
+      message,
+      line: this.line,
+      column: this.column - length,
+      length,
+    });
+  }
+
   private scanToken(): void {
     const start = this.pos;
-    const startColumn = this.column;
     const char = this.advance();
+
+    // Check for single-character tokens first
+    const singleCharType = SINGLE_CHAR_TOKENS.get(char);
+    if (singleCharType) {
+      this.addToken(singleCharType, char, 1);
+      return;
+    }
 
     switch (char) {
       case ' ':
       case '\t':
         // Count indentation at line start
         if (this.atLineStart) {
-          this.currentIndent += (char === '\t' ? 4 : 1);
+          this.currentIndent += (char === '\t' ? this.tabWidth : 1);
         }
         break;
 
@@ -133,41 +190,6 @@ export class Lexer {
         this.column = 1;
         this.atLineStart = true;
         this.currentIndent = 0;
-        break;
-
-      case '(':
-        this.addToken(TokenType.LPAREN, '(', 1);
-        break;
-      case ')':
-        this.addToken(TokenType.RPAREN, ')', 1);
-        break;
-      case '[':
-        this.addToken(TokenType.LBRACKET, '[', 1);
-        break;
-      case ']':
-        this.addToken(TokenType.RBRACKET, ']', 1);
-        break;
-      case ',':
-        this.addToken(TokenType.COMMA, ',', 1);
-        break;
-      case '.':
-        this.addToken(TokenType.DOT, '.', 1);
-        break;
-      case '?':
-        this.addToken(TokenType.TERNARY, '?', 1);
-        break;
-
-      case '+':
-        this.addToken(TokenType.PLUS, '+', 1);
-        break;
-      case '-':
-        this.addToken(TokenType.MINUS, '-', 1);
-        break;
-      case '*':
-        this.addToken(TokenType.MULTIPLY, '*', 1);
-        break;
-      case '%':
-        this.addToken(TokenType.MODULO, '%', 1);
         break;
 
       case '/':
@@ -205,6 +227,10 @@ export class Lexer {
         if (this.peek() === '=') {
           this.advance();
           this.addToken(TokenType.COMPARE, '!=', 2);
+        } else {
+          // Pine Script uses 'not' keyword, not '!' operator
+          this.reportError("Unexpected character '!'. Pine Script uses 'not' keyword instead.", 1);
+          this.addToken(TokenType.ERROR, '!', 1);
         }
         break;
 
@@ -272,6 +298,8 @@ export class Lexer {
 
   private scanBlockComment(): void {
     const start = this.pos - 1;
+    const startLine = this.line;
+    const startColumn = this.column - 1;
     this.advance(); // consume *
 
     while (!this.isAtEnd()) {
@@ -282,13 +310,13 @@ export class Lexer {
       }
       if (this.peek() === '\n') {
         this.line++;
-        this.column = 0;
+        this.column = 1;  // Reset to 1 (1-indexed), advance() will increment it
       }
       this.advance();
     }
 
     const value = this.source.substring(start, this.pos);
-    this.addToken(TokenType.COMMENT, value, value.length);
+    this.addTokenWithPosition(TokenType.COMMENT, value, startLine, startColumn, this.line, this.column);
   }
 
   /**
@@ -300,6 +328,8 @@ export class Lexer {
    */
   private scanString(quote: string): void {
     const start = this.pos - 1; // Include the opening quote
+    const startLine = this.line;
+    const startColumn = this.column - 1;
 
     while (!this.isAtEnd()) {
       const char = this.peek();
@@ -313,7 +343,7 @@ export class Lexer {
       } else {
         if (char === '\n') {
           this.line++;
-          this.column = 0;
+          this.column = 1;  // Reset to 1 (1-indexed), advance() will increment it
         }
         this.advance(); // Consume regular character
       }
@@ -324,7 +354,7 @@ export class Lexer {
     }
 
     const value = this.source.substring(start, this.pos);
-    this.addToken(TokenType.STRING, value, value.length);
+    this.addTokenWithPosition(TokenType.STRING, value, startLine, startColumn, this.line, this.column);
   }
 
   /**
@@ -476,13 +506,43 @@ export class Lexer {
       this.atLineStart = false;
     }
 
+    const startColumn = this.column - length;
     this.tokens.push({
       type,
       value,
       line: this.line,
-      column: this.column - length,
+      column: startColumn,
       length,
-      indent: this.atLineStart ? undefined : this.currentIndent,  // Only set indent for non-line-start tokens
+      indent: this.currentIndent,  // Record the indentation of the line containing this token
+      endLine: this.line,
+      endColumn: this.column,
+    });
+  }
+
+  /**
+   * Add a token with explicit start and end positions (for multi-line tokens)
+   */
+  private addTokenWithPosition(
+    type: TokenType,
+    value: string,
+    startLine: number,
+    startColumn: number,
+    endLine: number,
+    endColumn: number
+  ): void {
+    if (type !== TokenType.NEWLINE && type !== TokenType.WHITESPACE && this.atLineStart) {
+      this.atLineStart = false;
+    }
+
+    this.tokens.push({
+      type,
+      value,
+      line: startLine,
+      column: startColumn,
+      length: value.length,
+      indent: this.currentIndent,
+      endLine,
+      endColumn,
     });
   }
 }
