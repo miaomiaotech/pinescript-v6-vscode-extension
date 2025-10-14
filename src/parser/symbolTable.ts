@@ -253,6 +253,21 @@ export class SymbolTable {
     return this.globalScope.getAllUnusedSymbolsRecursive();
   }
 
+  // Get all symbols from all scopes recursively
+  getAllSymbols(): Symbol[] {
+    const symbols: Symbol[] = [];
+    const collectSymbols = (scope: Scope) => {
+      symbols.push(...scope.getAllSymbols());
+      // Access private children through the scope's method if available
+      const children = (scope as any).children || [];
+      for (const child of children) {
+        collectSymbols(child);
+      }
+    };
+    collectSymbols(this.globalScope);
+    return symbols;
+  }
+
   // Find similar symbol names (for typo suggestions)
   findSimilarSymbols(name: string, threshold: number = 2): string[] {
     const allSymbols = this.getAllSymbolNames();

@@ -13,4 +13,5 @@ esbuild.build({
   external: ['vscode'],
   format: 'cjs',
   platform: 'node',
+  sourcemap: true,
 }).catch(() => process.exit(1));

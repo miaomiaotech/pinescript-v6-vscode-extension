@@ -1,0 +1,45 @@
+//@version=6
+indicator("User Function Tuple Test")
+
+// 用户自定义函数返回元组
+myFunction(x, y) =>
+    result1 = x + y
+    result2 = x * y
+    [result1, result2]
+
+// 解构赋值 - 应该推断出 result1 和 result2 的类型
+[sum, product] = myFunction(10, 20)
+
+// 测试：返回布尔值元组
+checkConditions(price) =>
+    isHigh = price > 100
+    isLow = price < 50
+    [isHigh, isLow]
+
+// 解构赋值 - 应该推断出 bool 类型
+[high, low] = checkConditions(close)
+
+// 测试：混合类型元组
+getMixedValues() =>
+    count = 42
+    ratio = 3.14
+    flag = true
+    [count, ratio, flag]
+
+// 解构赋值 - 应该推断出不同的类型
+[myCount, myRatio, myFlag] = getMixedValues()
+
+// 测试：series 类型元组
+getSeriesValues() =>
+    sma20 = ta.sma(close, 20)
+    rsi14 = ta.rsi(close, 14)
+    [sma20, rsi14]
+
+// 解构赋值 - 应该推断出 series<float> 类型
+[mySma, myRsi] = getSeriesValues()
+
+// 绘图验证类型
+plot(sum, "Sum", color=color.blue)
+plot(product, "Product", color=color.red)
+plotshape(high, "High", style=shape.triangledown, location=location.top)
+plotshape(low, "Low", style=shape.triangleup, location=location.bottom)

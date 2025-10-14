@@ -1,13 +1,13 @@
 {
   "name": "pinescript-language-v6",
   "displayName": "Pine Script Language v6",
-  "description": "Pine Script language v6 support for VS Code, including syntax highlighting, IntelliSense, and diagnostics.",
+  "description": "为 VS Code 提供丰富的 Pine Script v6 语言支持，包括语法高亮、智能提示、函数签名帮助、转到定义、查找所有引用、符号重命名、嵌入提示和实时诊断。",
   "publisher": "weaming",
   "author": {
     "name": "Garden Yuen",
     "url": "https://github.com/weaming"
   },
-  "version": "0.1.1",
+  "version": "0.1.2",
   "icon": "icon.png",
   "repository": {
     "type": "git",
@@ -80,6 +80,11 @@
           "type": "number",
           "default": 1200,
           "description": "Request timeout in milliseconds."
+        },
+        "pine.inlayHints.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show inferred types as inlay hints next to variable declarations."
         }
       }
     },
@@ -107,10 +112,10 @@
   },
   "scripts": {
     "clean": "rm -rf dist; rm -rf build",
-    "build": "node esbuild.js",
+    "build:es": "node esbuild.js",
     "build:tsc": "tsc -p .",
     "watch": "tsc -w -p .",
-    "package": "npm run clean; npm run build && mkdir -p build && vsce package --no-dependencies -o build/pinescript-v6-extension.vsix"
+    "package": "npm run build:es && mkdir -p build && vsce package --no-dependencies -o build/pinescript-v6-extension.vsix"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.19.1",

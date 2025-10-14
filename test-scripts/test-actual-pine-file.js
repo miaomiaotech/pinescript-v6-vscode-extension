@@ -13,10 +13,10 @@ const { Parser } = require('../dist/src/parser/parser.js');
 const { SymbolTable } = require('../dist/src/parser/symbolTable.js');
 const { AstVisitor } = require('../dist/src/parser/astVisitor.js');
 
-const filePath = './samples/通用顶底检测函数.pine';
+const filePath = './samples/detect-high-low.pine';
 const code = fs.readFileSync(filePath, 'utf-8');
 
-console.log('=== Testing actual Pine file: 通用顶底检测函数.pine ===\n');
+console.log('=== Testing actual Pine file: detect-high-low.pine ===\n');
 
 const parser = new Parser(code);
 const ast = parser.parse();

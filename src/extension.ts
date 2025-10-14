@@ -14,6 +14,7 @@ import { DefinitionProvider } from './definitionProvider';
 import { RenameProvider } from './renameProvider';
 import { ReferenceProvider } from './referenceProvider';
 import { PineColorProvider } from './colorProvider';
+import { PineInlayHintsProvider } from './inlayHintsProvider';
 
 export function activate(context: vscode.ExtensionContext) {
   // Optional: ensure files.associations maps *.pine -> pine
@@ -312,6 +313,14 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.languages.registerColorProvider(
       { language: 'pine', scheme: 'file' },
       new PineColorProvider()
+    )
+  );
+
+  // Inlay Hints Provider - Show inferred types next to variables
+  context.subscriptions.push(
+    vscode.languages.registerInlayHintsProvider(
+      { language: 'pine', scheme: 'file' },
+      new PineInlayHintsProvider()
     )
   );
 }

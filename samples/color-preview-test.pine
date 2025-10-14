@@ -1,0 +1,41 @@
+//@version=6
+indicator("Color Preview Test", overlay=true)
+
+// 1. 十六进制颜色字面量
+hexColor1 = #FF5733
+hexColor2 = #3498DB
+hexColor3 = #2ECC71AA  // 带透明度
+
+// 2. color.* 预定义常量
+redColor = color.red
+greenColor = color.green
+blueColor = color.blue
+yellowColor = color.yellow
+orangeColor = color.orange
+purpleColor = color.purple
+
+// 3. color.rgb() 函数
+rgbColor1 = color.rgb(255, 87, 51)
+rgbColor2 = color.rgb(52, 152, 219)
+rgbColor3 = color.rgb(46, 204, 113, 50)  // 带透明度
+
+// 4. color.new() 函数
+newColor1 = color.new(color.red, 0)
+newColor2 = color.new(color.green, 50)
+newColor3 = color.new(color.blue, 90)
+
+// 5. 在实际使用中
+plot(close, color=color.blue)
+bgcolor(color.new(color.green, 95))
+
+if close > open
+    barcolor(#2ECC71)
+else
+    barcolor(color.red)
+
+// 6. 填充颜色
+upColor = color.new(#26A69A, 90)
+downColor = color.new(#EF5350, 90)
+
+plotshape(close > open, style=shape.triangleup, location=location.belowbar, color=upColor)
+plotshape(close < open, style=shape.triangledown, location=location.abovebar, color=downColor)

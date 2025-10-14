@@ -14,7 +14,7 @@ const { AstValidator } = require('../dist/src/parser/astValidator.js');
 
 console.log('=== Testing AstValidator on actual Pine file ===\n');
 
-const filePath = './samples/通用顶底检测函数.pine';
+const filePath = './samples/detect-high-low.pine';
 const code = fs.readFileSync(filePath, 'utf-8');
 
 const parser = new Parser(code);

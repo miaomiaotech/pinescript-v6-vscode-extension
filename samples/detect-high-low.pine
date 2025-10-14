@@ -1,0 +1,128 @@
+//@version=6
+// =============================================================================
+//                          通用顶底判断函数库
+// =============================================================================
+// 此函数可用于任何震荡指标（RSI, KDJ, CCI, 自定义指标等）
+// 核心思想：基于动态周期 + 超买超卖 + 价格确认
+
+// @function 检测指标的顶底反转信号
+// @param indicator 待检测的指标值序列
+// @param overbought 超买阈值
+// @param oversold 超卖阈值
+// @param centerline 中线值（用于判断顶底周期）
+// @param allow_repeat 是否允许同一周期重复触发信号（默认false）
+// @returns [is_top, is_bottom] 是否为顶部/底部信号
+export detect_high_low(series float indicator, float overbought, float oversold, float centerline, bool allow_repeat = false) =>
+    // 动态周期识别
+    var bool in_top_cycle = indicator > centerline
+    var int cycle_start = 0
+    var bool reached_overbuy = false
+    var bool reached_oversell = false
+    var bool top_triggered = false
+    var bool bottom_triggered = false
+
+    // 周期切换检测
+    cross_up = ta.crossover(indicator, centerline)
+    cross_down = ta.crossunder(indicator, centerline)
+
+    if cross_up
+        in_top_cycle := true
+        cycle_start := bar_index
+        reached_overbuy := false
+        reached_oversell := false
+        top_triggered := false
+        bottom_triggered := false
+    else if cross_down
+        in_top_cycle := false
+        cycle_start := bar_index
+        reached_overbuy := false
+        reached_oversell := false
+        top_triggered := false
+        bottom_triggered := false
+
+    // 记录是否达到超买超卖（检测最近3根K线）
+    if in_top_cycle and ta.highest(indicator, 3) >= overbought
+        reached_overbuy := true
+    if not in_top_cycle and ta.lowest(indicator, 3) <= oversold
+        reached_oversell := true
+
+    // 计算周期内价格极值
+    cycle_len = bar_index - cycle_start + 1
+    cycle_high = ta.highest(high, cycle_len)
+    cycle_low = ta.lowest(low, cycle_len)
+
+    // 指标变化方向
+    falling = indicator < indicator[1]
+    rising = indicator > indicator[1]
+
+    // 价格位置判断
+    at_high = high >= cycle_high
+    at_low = low <= cycle_low
+
+    // 顶底信号（根据参数决定是否去重）
+    bool is_top = false
+    bool is_bottom = false
+
+    if allow_repeat
+        // 允许重复：不检查触发标记
+        is_top := in_top_cycle and reached_overbuy and falling and at_high
+        is_bottom := not in_top_cycle and reached_oversell and rising and at_low
+    else
+        // 不允许重复：检查触发标记（默认行为）
+        is_top := in_top_cycle and reached_overbuy and falling and at_high and not top_triggered
+        is_bottom := not in_top_cycle and reached_oversell and rising and at_low and not bottom_triggered
+
+        // 触发后标记，避免重复
+        if is_top
+            top_triggered := true
+        if is_bottom
+            bottom_triggered := true
+
+    [is_top, is_bottom]
+
+// =============================================================================
+//                          使用示例
+// =============================================================================
+
+indicator("通用顶底检测示例", overlay=false)
+
+// === 参数设置 ===
+allow_repeat_signals = input.bool(false, "允许同一周期重复信号", tooltip="false=每周期只触发一次，true=每次满足条件都触发")
+
+// === 示例1: RSI顶底检测（去重模式） ===
+rsi_value = ta.rsi(close, 14)
+[rsi_top, rsi_bottom] = detect_high_low(rsi_value, 70, 30, 50, allow_repeat_signals)
+
+plot(rsi_value, "RSI", color=color.blue)
+hline(70, "超买", color=color.red)
+hline(30, "超卖", color=color.green)
+hline(50, "中线", color=color.gray)
+
+plotshape(rsi_top, "RSI顶", style=shape.triangledown, location=location.top, color=color.red, size=size.small)
+plotshape(rsi_bottom, "RSI底", style=shape.triangleup, location=location.bottom, color=color.green, size=size.small)
+
+// === 示例2: KDJ顶底检测（允许重复） ===
+kdj_period = 9
+highest_high = ta.highest(high, kdj_period)
+lowest_low = ta.lowest(low, kdj_period)
+rsv = (close - lowest_low) / (highest_high - lowest_low) * 100
+k_value = ta.sma(rsv, 3)
+
+// 演示：KDJ使用允许重复模式
+[kdj_top, kdj_bottom] = detect_high_low(k_value, 80, 20, 50, true)
+
+// === 示例3: CCI顶底检测（默认去重） ===
+cci_value = ta.cci(close, 20)
+// 不传allow_repeat参数，使用默认值false（去重）
+[cci_top, cci_bottom] = detect_high_low(cci_value, 100, -100, 0)
+
+// === 告警示例 ===
+if rsi_top
+    alert("RSI顶部反转（去重模式）", alert.freq_once_per_bar)
+if rsi_bottom
+    alert("RSI底部反转（去重模式）", alert.freq_once_per_bar)
+
+if kdj_top
+    alert("KDJ顶部反转（允许重复）", alert.freq_once_per_bar)
+if kdj_bottom
+    alert("KDJ底部反转（允许重复）", alert.freq_once_per_bar)

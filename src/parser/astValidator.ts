@@ -46,6 +46,9 @@ export class AstValidator {
   private symbolTable: SymbolTable;
   private functionSignatures: Map<string, FunctionSignature> = new Map();
   private expressionTypes: Map<Expression, PineType> = new Map();
+  private ast: Program | null = null;
+  private functionDeclarations: Map<string, any> = new Map();
+  private symbolMap: Map<string, SymbolInfo> = new Map(); // 缓存符号映射
 
   constructor() {
     this.symbolTable = new SymbolTable();
@@ -56,8 +59,11 @@ export class AstValidator {
     this.errors = [];
     this.symbolTable = new SymbolTable();
     this.expressionTypes.clear();
+    this.ast = ast;
+    this.functionDeclarations.clear();
+    this.symbolMap.clear();
 
-    // First pass: collect all variable declarations
+    // First pass: collect all function declarations and variable declarations
     for (const statement of ast.body) {
       this.collectDeclarations(statement);
     }
@@ -70,7 +76,29 @@ export class AstValidator {
     // Check for unused variables
     this.checkUnusedVariables();
 
+    // Build symbol map for quick lookup (used by InlayHintsProvider)
+    this.buildSymbolMap();
+
     return this.errors;
+  }
+
+  /**
+   * Build a map for quick symbol lookup by name and line
+   * This is used by InlayHintsProvider to avoid rebuilding the map
+   */
+  private buildSymbolMap(): void {
+    const allSymbols = this.symbolTable.getAllSymbols();
+    for (const symbol of allSymbols) {
+      const key = `${symbol.name}:${symbol.line}`;
+      this.symbolMap.set(key, symbol);
+    }
+  }
+
+  /**
+   * Get the cached symbol map (for InlayHintsProvider)
+   */
+  public getSymbolMap(): Map<string, SymbolInfo> {
+    return this.symbolMap;
   }
 
   private buildFunctionSignatures(): void {
@@ -408,10 +436,59 @@ export class AstValidator {
       this.symbolTable.define(symbol);
     } else if (statement.type === 'DestructuringAssignment') {
       // Handle destructuring assignment: [a, b] = expr
-      for (const variable of statement.variables) {
+      // Try to infer the type of the expression being destructured
+      const initType = this.inferExpressionType(statement.init);
+
+      // Try to extract element types from array expression
+      let elementTypes: PineType[] = [];
+
+      // If init is an array literal, infer type of each element
+      if (statement.init.type === 'ArrayExpression') {
+        const arrayExpr = statement.init as any;
+        elementTypes = arrayExpr.elements.map((el: Expression) => this.inferExpressionType(el));
+      }
+      // If init is a function call, try to infer from return type
+      else if (statement.init.type === 'CallExpression') {
+        const callExpr = statement.init as CallExpression;
+        let funcName = '';
+        if (callExpr.callee.type === 'Identifier') {
+          funcName = callExpr.callee.name;
+        } else if (callExpr.callee.type === 'MemberExpression') {
+          const member = callExpr.callee;
+          if (member.object.type === 'Identifier') {
+            funcName = `${member.object.name}.${member.property.name}`;
+          }
+        }
+
+        // Check if it's a user-defined function
+        const funcSymbol = this.symbolTable.lookup(funcName);
+        if (funcSymbol && funcSymbol.kind === 'function') {
+          // Analyze the function body to extract tuple element types
+          const tupleTypes = this.inferFunctionTupleReturnTypes(funcName);
+          if (tupleTypes.length > 0) {
+            elementTypes = tupleTypes;
+          }
+        }
+
+        // Check built-in functions that return tuples
+        // ta.macd returns [macd, signal, histogram] - all series<float>
+        if (elementTypes.length === 0) {
+          if (funcName === 'ta.macd') {
+            elementTypes = ['series<float>', 'series<float>', 'series<float>'];
+          } else if (funcName === 'ta.bb' || funcName === 'ta.bbands') {
+            elementTypes = ['series<float>', 'series<float>', 'series<float>'];
+          } else if (funcName === 'ta.supertrend') {
+            elementTypes = ['series<float>', 'series<int>'];
+          }
+        }
+      }
+
+      // Assign types to variables
+      for (let i = 0; i < statement.variables.length; i++) {
+        const variable = statement.variables[i];
         const symbol: SymbolInfo = {
           name: variable.name,
-          type: 'unknown',
+          type: i < elementTypes.length ? elementTypes[i] : 'unknown',
           line: variable.line,
           column: variable.column,
           used: false,
@@ -420,16 +497,12 @@ export class AstValidator {
           references: [],
         };
 
-        // Try to infer type from initialization
-        // For now, we can't easily infer individual element types from destructuring
-        // This would require analyzing the return type of the function call
-        // If the init is a function returning a tuple or array, we'd need to extract element types
-        // For now, mark as unknown
-        symbol.type = 'unknown';
-
         this.symbolTable.define(symbol);
       }
     } else if (statement.type === 'FunctionDeclaration') {
+      // Save function declaration for later analysis
+      this.functionDeclarations.set(statement.name, statement);
+
       // Don't create scope here - will be done in validateStatement
       // Just define the function symbol in the current (parent) scope
       // Return type will be 'unknown' for now (can be inferred later if needed)
@@ -938,6 +1011,114 @@ export class AstValidator {
     }
 
     return 'unknown';
+  }
+
+  /**
+   * Analyze a function's return value and extract tuple element types if it returns an array
+   * This method builds a temporary type map from the function's AST without modifying the symbol table
+   * @param funcName - The name of the function
+   * @returns Array of element types, or empty array if not a tuple return
+   */
+  private inferFunctionTupleReturnTypes(funcName: string): PineType[] {
+    const funcDecl = this.functionDeclarations.get(funcName);
+    if (!funcDecl || !funcDecl.body || funcDecl.body.length === 0) {
+      return [];
+    }
+
+    // Build a temporary type map for the function's local variables
+    // without modifying the symbol table (so we don't interfere with the actual validation)
+    const localTypes = new Map<string, PineType>();
+
+    // Add parameter types
+    for (let i = 0; i < funcDecl.params.length; i++) {
+      const param = funcDecl.params[i];
+      const paramType = i === 0 ? 'series<float>' : 'unknown';
+      localTypes.set(param.name, paramType);
+    }
+
+    // Collect type information from all variable declarations in the function
+    const collectTypes = (stmt: Statement) => {
+      if (stmt.type === 'VariableDeclaration' && stmt.init) {
+        const varType = this.inferExpressionTypeWithLocals(stmt.init, localTypes);
+        localTypes.set(stmt.name, varType);
+      } else if (stmt.type === 'IfStatement') {
+        for (const s of stmt.consequent) {
+          collectTypes(s);
+        }
+        if (stmt.alternate) {
+          for (const s of stmt.alternate) {
+            collectTypes(s);
+          }
+        }
+      } else if (stmt.type === 'ForStatement' || stmt.type === 'WhileStatement') {
+        for (const s of stmt.body) {
+          collectTypes(s);
+        }
+      }
+    };
+
+    for (const stmt of funcDecl.body) {
+      collectTypes(stmt);
+    }
+
+    // Get the last statement in the function body (the return value in Pine Script)
+    const lastStmt = funcDecl.body[funcDecl.body.length - 1];
+
+    let returnExpr: Expression | null = null;
+
+    // Extract the return expression
+    if (lastStmt.type === 'ExpressionStatement') {
+      returnExpr = lastStmt.expression;
+    } else if (lastStmt.type === 'VariableDeclaration' && lastStmt.init) {
+      returnExpr = lastStmt.init;
+    }
+
+    let elementTypes: PineType[] = [];
+
+    // Check if the return expression is an array literal
+    if (returnExpr && returnExpr.type === 'ArrayExpression') {
+      const arrayExpr = returnExpr as any;
+      // Infer the type of each element using the local type map
+      elementTypes = arrayExpr.elements.map((el: Expression) =>
+        this.inferExpressionTypeWithLocals(el, localTypes)
+      );
+    }
+
+    return elementTypes;
+  }
+
+  /**
+   * Infer expression type using a local type map (for function analysis)
+   * This allows us to infer types without modifying the global symbol table
+   */
+  private inferExpressionTypeWithLocals(expr: Expression, localTypes: Map<string, PineType>): PineType {
+    switch (expr.type) {
+      case 'Literal':
+        return TypeChecker.inferLiteralType((expr as Literal).value);
+
+      case 'Identifier':
+        const identName = (expr as Identifier).name;
+        // Check local types first, then fall back to symbol table
+        if (localTypes.has(identName)) {
+          return localTypes.get(identName)!;
+        }
+        const symbol = this.symbolTable.lookup(identName);
+        return symbol ? symbol.type : 'unknown';
+
+      case 'BinaryExpression':
+        const binaryExpr = expr as any;
+        const leftType = this.inferExpressionTypeWithLocals(binaryExpr.left, localTypes);
+        const rightType = this.inferExpressionTypeWithLocals(binaryExpr.right, localTypes);
+        return TypeChecker.getBinaryOpType(leftType, rightType, binaryExpr.operator);
+
+      case 'CallExpression':
+        // For call expressions, fall back to the normal type inference
+        return this.inferExpressionType(expr);
+
+      default:
+        // For other cases, fall back to normal inference
+        return this.inferExpressionType(expr);
+    }
   }
 
   private inferExpressionType(expr: Expression): PineType {
