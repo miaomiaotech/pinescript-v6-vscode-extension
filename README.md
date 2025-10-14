@@ -13,6 +13,13 @@
 *   **颜色预览:** 直接在编辑器中预览颜色字面量。
 *   **实时校验 (Real-time Validation):** 通过实时错误检查，即时获取代码反馈。
 
+<img width="2290" height="1292" alt="027dba51ac0027a8ac369136c68428f4" src="https://github.com/user-attachments/assets/d7a12eee-9add-40c4-8b14-cf4ccaafab47" />
+
+<img width="1602" height="1706" alt="d41f5ad4cd40b0d417c50cfe1b6310dd" src="https://github.com/user-attachments/assets/35107fbb-aa82-40a0-a4d0-b404c7b88c81" />
+
+<img width="1534" height="1934" alt="4971ec2f1f1d8c4a67d20f9f2fd79fdc" src="https://github.com/user-attachments/assets/fc672fa1-dd83-4990-a792-dbaa9601519f" />
+
+
 ## 安装
 
 1.  从 [GitHub Releases](https://github.com/miaomiaotech/pinescript-v6-vscode-extension/releases) 页面下载最新的 `.vsix` 文件。
