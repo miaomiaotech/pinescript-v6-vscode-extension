@@ -1,0 +1,12 @@
+//@version=5
+indicator("My Script")
+
+unused_var = 1
+_temp = 2
+
+[top, bottom] = ta.stoch(close, high, low, 14)
+
+plot(top)
+
+myFunc(y) =>
+    x = 1

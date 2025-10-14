@@ -118,7 +118,7 @@
     "clean": "rm -rf dist && rm -rf build",
     "build": "node esbuild.js",
     "build:tsc": "tsc -p .",
-    "watch": "tsc -p . --watch",
+    "watch": "tsc -p -w .",
     "package": "npm run clean && npm run build && mkdir -p build && vsce package --no-dependencies -o build/pinescript-v6-extension.vsix"
   },
   "devDependencies": {
