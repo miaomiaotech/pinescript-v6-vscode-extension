@@ -3,17 +3,51 @@ import { Position, Range } from 'vscode';
 import { Token, TokenType, Lexer } from './lexer';
 import * as AST from './ast';
 
+export interface ParserError {
+  message: string;
+  line: number;
+  column: number;
+  token?: Token;
+}
+
+// Type keywords used in multiple places
+const TYPE_KEYWORDS = ['int', 'float', 'bool', 'string', 'color', 'line', 'label',
+                       'box', 'table', 'array', 'matrix', 'map'] as const;
+
+// Type qualifiers
+const TYPE_QUALIFIERS = ['series', 'simple', 'input', 'const'] as const;
+
 export class Parser {
   private tokens: Token[] = [];
   private current: number = 0;
+  private errors: ParserError[] = [];
 
   constructor(source: string) {
     const lexer = new Lexer(source);
     this.tokens = lexer.tokenize().filter(t =>
       t.type !== TokenType.WHITESPACE &&
-      t.type !== TokenType.COMMENT &&
-      t.type !== TokenType.NEWLINE
+      t.type !== TokenType.COMMENT
     );
+  }
+
+  /**
+   * Get all parsing errors encountered
+   */
+  getErrors(): ParserError[] {
+    return this.errors;
+  }
+
+  /**
+   * Report a parsing error
+   */
+  private reportError(message: string, token?: Token): void {
+    const errorToken = token || this.peek();
+    this.errors.push({
+      message,
+      line: errorToken.line,
+      column: errorToken.column,
+      token: errorToken,
+    });
   }
 
   parse(): AST.Program {
@@ -25,15 +59,12 @@ export class Parser {
         const stmt = this.statement();
         if (stmt) body.push(stmt);
       } catch (e) {
-        // DEBUG: Log parsing errors to understand what's being skipped
         const errorMsg = e instanceof Error ? e.message : String(e);
-        console.error(`[PARSER ERROR] Line ${this.peek().line}: ${errorMsg}`);
-
-        // Skip to next statement on error
+        this.reportError(errorMsg);
         this.synchronize();
       }
     }
-    
+
     const endToken = this.previous();
 
     return {
@@ -88,7 +119,7 @@ export class Parser {
       const varKeyword = this.previous().value as any;
 
       // Check if next token is also a type keyword (e.g., var float x = 1.0)
-      if (this.check([TokenType.KEYWORD, ['int', 'float', 'bool', 'string', 'color', 'line', 'label', 'box', 'table', 'array', 'matrix', 'map']])) {
+      if (this.check([TokenType.KEYWORD, [...TYPE_KEYWORDS]])) {
         this.advance(); // consume type keyword
       }
 
@@ -96,7 +127,7 @@ export class Parser {
     }
 
     // Type-annotated variable declaration without var: int x = 1, float y = 2.0
-    if (this.check([TokenType.KEYWORD, ['int', 'float', 'bool', 'string', 'color', 'line', 'label', 'box', 'table', 'array', 'matrix', 'map']])) {
+    if (this.check([TokenType.KEYWORD, [...TYPE_KEYWORDS]])) {
       const checkpoint = this.current;
       const typeKeyword = this.advance(); // consume type keyword
 
@@ -193,75 +224,15 @@ export class Parser {
   private ifStatement(startToken: Token): AST.IfStatement {
     const condition = this.expression();
 
-    const consequent: AST.Statement[] = [];
-
-    // Skip newlines after condition
-    while (this.check(TokenType.NEWLINE)) {
-      this.advance();
-    }
-
-    // Parse the consequent block using indentation tracking
-    // Track the indentation of the if statement and its body
-    const baseIndent = this.peek().indent || 0;
-    let consequentIndent: number | null = null;
-
-    while (!this.isAtEnd() && !this.check([TokenType.KEYWORD, ['else']])) {
-      const currentToken = this.peek();
-      const currentIndent = currentToken.indent || 0;
-
-      // Set expected consequent indentation from first statement
-      if (consequentIndent === null && currentToken.line > startToken.line) {
-        consequentIndent = currentIndent;
-      }
-
-      // Stop if we've returned to base indentation level or less
-      if (consequentIndent !== null && currentToken.line > startToken.line && currentIndent < consequentIndent) {
-        break;
-      }
-
-      const stmt = this.statement();
-      if (stmt) {
-        consequent.push(stmt);
-      } else {
-        break;
-      }
-    }
+    // Parse consequent block
+    const consequent = this.parseIndentedBlock(startToken);
 
     let endToken = this.previous();
     let alternate: AST.Statement[] | undefined;
+
     if (this.match([TokenType.KEYWORD, ['else']])) {
       const elseToken = this.previous();
-      alternate = [];
-
-      // Skip newlines after 'else' keyword
-      while (this.check(TokenType.NEWLINE)) {
-        this.advance();
-      }
-
-      // Parse the alternate block using indentation tracking
-      let alternateIndent: number | null = null;
-
-      while (!this.isAtEnd()) {
-        const currentToken = this.peek();
-        const currentIndent = currentToken.indent || 0;
-
-        // Set expected alternate indentation from first statement
-        if (alternateIndent === null && currentToken.line > elseToken.line) {
-          alternateIndent = currentIndent;
-        }
-
-        // Stop if we've returned to base indentation level or less
-        if (alternateIndent !== null && currentToken.line > elseToken.line && currentIndent < alternateIndent) {
-          break;
-        }
-
-        const stmt = this.statement();
-        if (stmt) {
-          alternate.push(stmt);
-        } else {
-          break;
-        }
-      }
+      alternate = this.parseIndentedBlock(elseToken);
       endToken = this.previous();
     }
 
@@ -283,39 +254,10 @@ export class Parser {
     this.match([TokenType.KEYWORD, ['to']]); // optional 'to' keyword
     const to = this.expression();
 
-    const body: AST.Statement[] = [];
+    // Parse loop body
+    const body = this.parseIndentedBlock(startToken);
 
-    // Skip newlines after to expression
-    while (this.check(TokenType.NEWLINE)) {
-      this.advance();
-    }
-
-    // Parse the loop body using indentation tracking
-    let bodyIndent: number | null = null;
-
-    while (!this.isAtEnd()) {
-      const currentToken = this.peek();
-      const currentIndent = currentToken.indent || 0;
-
-      // Set expected body indentation from first statement
-      if (bodyIndent === null && currentToken.line > startToken.line) {
-        bodyIndent = currentIndent;
-      }
-
-      // Stop if we've returned to base indentation level or less
-      if (bodyIndent !== null && currentToken.line > startToken.line && currentIndent < bodyIndent) {
-        break;
-      }
-
-      const stmt = this.statement();
-      if (stmt) {
-        body.push(stmt);
-      } else {
-        break;
-      }
-    }
-
-    const endToken = body.length > 0 ? this.previous() : to.range.end.isAfter(from.range.end) ? this.previous() : this.tokens[this.tokens.indexOf(this.previous())];
+    const endToken = body.length > 0 ? this.previous() : this.tokens[this.current - 1];
 
     return {
       type: 'ForStatement',
@@ -332,11 +274,10 @@ export class Parser {
   private whileStatement(startToken: Token): AST.WhileStatement {
     const condition = this.expression();
 
-    const body: AST.Statement[] = [];
-    const stmt = this.statement();
-    if (stmt) body.push(stmt);
-    
-    const endToken = body.length > 0 ? this.previous() : this.tokens[this.tokens.indexOf(this.previous())];
+    // Parse loop body
+    const body = this.parseIndentedBlock(startToken);
+
+    const endToken = body.length > 0 ? this.previous() : this.tokens[this.current - 1];
 
     return {
       type: 'WhileStatement',
@@ -371,12 +312,9 @@ export class Parser {
     //        y + 1
     const body: AST.Statement[] = [];
 
-    // Get the base indentation (indentation of the function declaration line)
-    const baseIndent = this.peek().indent || 0;
-
-    // Check if next token is on a new line with deeper indentation
+    // Check if next token is on the same line (single-line function)
     const nextToken = this.peek();
-    if (nextToken.line === startToken.line) {
+    if (nextToken.type !== TokenType.NEWLINE && nextToken.line === startToken.line) {
       // Single-line function: same line as =>
       try {
         const expr = this.expression();
@@ -388,44 +326,14 @@ export class Parser {
           range: expr.range,
         } as AST.ReturnStatement);
       } catch (e) {
-        // Error parsing expression - function may be incomplete
+        const errorMsg = e instanceof Error ? e.message : String(e);
+        this.reportError(`Error parsing function body: ${errorMsg}`);
       }
     } else {
       // Multi-line function: parse all statements at deeper indentation
-      // Determine the expected function body indentation from the first token
-      let functionBodyIndent: number | null = null;
-
-      while (!this.isAtEnd()) {
-        const currentToken = this.peek();
-        const currentIndent = currentToken.indent || 0;
-
-        // Set expected body indentation from first statement
-        if (functionBodyIndent === null && currentToken.line > startToken.line) {
-          functionBodyIndent = currentIndent;
-        }
-
-        // Stop if we've returned to base indentation level or less
-        // AND we're past the function declaration line
-        if (currentToken.line > startToken.line && functionBodyIndent !== null && currentIndent < functionBodyIndent) {
-          break;
-        }
-
-        // Parse statement at this indentation level
-        try {
-          const stmt = this.statement();
-          if (stmt) {
-            body.push(stmt);
-          } else {
-            break;
-          }
-        } catch (e) {
-          // Error parsing statement - try to recover
-          console.error("Parser.statement() err:", e, "current token:", this.peek());
-          break;
-        }
-      }
+      body.push(...this.parseIndentedBlock(startToken));
     }
-    
+
     const endToken = this.previous();
 
     return {
@@ -452,12 +360,12 @@ export class Parser {
       let typeName: string | undefined = undefined;
 
       // Check for qualifier (e.g., 'series', 'simple')
-      if (this.check([TokenType.KEYWORD, ['series', 'simple', 'input', 'const']])) {
+      if (this.check([TokenType.KEYWORD, [...TYPE_QUALIFIERS]])) {
         qualifier = this.advance().value;
       }
 
       // Check for type name (e.g., 'float', 'int', 'bool')
-      if (this.check([TokenType.KEYWORD, ['int', 'float', 'bool', 'string', 'color', 'line', 'label', 'box', 'table', 'array', 'matrix', 'map']])) {
+      if (this.check([TokenType.KEYWORD, [...TYPE_KEYWORDS]])) {
         typeName = this.advance().value;
       }
 
@@ -666,22 +574,18 @@ export class Parser {
           range: new Range(expr.range.start, propertyIdentifier.range.end),
         };
       } else if (this.check(TokenType.LBRACKET)) {
-        // array[index] or [a, b]
-        if (this.tokens[this.current + 2].type === TokenType.COMMA) {
-          return this.primary()
-        } else {
-          this.advance(); // consume [
-          const index = this.expression();
-          const endToken = this.consume(TokenType.RBRACKET, 'Expected "]"');
-          expr = {
-            type: 'IndexExpression',
-            object: expr,
-            index,
-            line: expr.line,
-            column: expr.column,
-            range: new Range(expr.range.start, this.tokenRange(endToken).end),
-          };
-        }
+        // array[index]
+        this.advance(); // consume [
+        const index = this.expression();
+        const endToken = this.consume(TokenType.RBRACKET, 'Expected "]"');
+        expr = {
+          type: 'IndexExpression',
+          object: expr,
+          index,
+          line: expr.line,
+          column: expr.column,
+          range: new Range(expr.range.start, this.tokenRange(endToken).end),
+        };
       } else {
         break;
       }
@@ -827,9 +731,60 @@ export class Parser {
   }
 
   private tokenRange(token: Token): Range {
+    // Use endLine/endColumn if available (for multi-line tokens)
+    if (token.endLine !== undefined && token.endColumn !== undefined) {
+      const start = new Position(token.line - 1, token.column - 1);
+      const end = new Position(token.endLine - 1, token.endColumn - 1);
+      return new Range(start, end);
+    }
+    // Fallback to calculating from length
     const start = new Position(token.line - 1, token.column - 1);
     const end = new Position(token.line - 1, (token.column - 1) + token.value.length);
     return new Range(start, end);
+  }
+
+  /**
+   * Parse an indented block of statements
+   * Used by if/for/while/function to parse their bodies
+   */
+  private parseIndentedBlock(startToken: Token): AST.Statement[] {
+    const body: AST.Statement[] = [];
+    let blockIndent: number | null = null;
+
+    while (!this.isAtEnd()) {
+      const currentToken = this.peek();
+      const currentIndent = currentToken.indent ?? 0;
+
+      // Skip NEWLINE tokens
+      if (currentToken.type === TokenType.NEWLINE) {
+        this.advance();
+        continue;
+      }
+
+      // Set expected block indentation from first statement
+      if (blockIndent === null && currentToken.line > startToken.line) {
+        blockIndent = currentIndent;
+      }
+
+      // Stop if we've returned to base indentation level or less
+      if (blockIndent !== null && currentToken.line > startToken.line && currentIndent < blockIndent) {
+        break;
+      }
+
+      // Stop at else keyword (for if statements)
+      if (this.check([TokenType.KEYWORD, ['else']])) {
+        break;
+      }
+
+      const stmt = this.statement();
+      if (stmt) {
+        body.push(stmt);
+      } else {
+        break;
+      }
+    }
+
+    return body;
   }
 
   // Utility methods
