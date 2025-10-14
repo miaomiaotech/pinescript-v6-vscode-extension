@@ -9,9 +9,8 @@ import {
 } from './completions';
 import { createSignatureHelpProvider } from './signatureHelp';
 import { Parser } from './parser/parser';
-import { PineScriptValidator } from './parser/validator';
-import { ComprehensiveValidator, ErrType } from './parser/comprehensiveValidator';
-import { AccurateValidator } from './parser/accurateValidator';
+import { AstValidator, ErrType } from './parser/astValidator';
+import { PatternValidator } from './parser/patternValidator';
 import { DefinitionProvider } from './definitionProvider';
 import { RenameProvider } from './renameProvider';
 import { ReferenceProvider } from './referenceProvider';
@@ -164,12 +163,12 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(diagCollection);
 
   /**
-   * Run AccurateValidator and collect diagnostics
+   * Run PatternValidator and collect diagnostics
    */
-  const runAccurateValidation = (text: string, diags: vscode.Diagnostic[]): void => {
+  const runPatternValidation = (text: string, diags: vscode.Diagnostic[]): void => {
     try {
-      const accurateValidator = new AccurateValidator();
-      const errors = accurateValidator.validate(text);
+      const patternValidator = new PatternValidator();
+      const errors = patternValidator.validate(text);
 
       for (const error of errors) {
         const pos = new vscode.Position(error.line - 1, error.column - 1);
@@ -186,9 +185,9 @@ export function activate(context: vscode.ExtensionContext) {
   };
 
   /**
-   * Run AST-based comprehensive validation
+   * Run AST-based validation
    */
-  const runComprehensiveValidation = (text: string, diags: vscode.Diagnostic[]): void => {
+  const runAstValidation = (text: string, diags: vscode.Diagnostic[]): void => {
     try {
       const parser = new Parser(text);
       const ast = parser.parse();
@@ -205,10 +204,10 @@ export function activate(context: vscode.ExtensionContext) {
         ));
       }
 
-      // Run comprehensive validator
-      const validator = new ComprehensiveValidator();
-      const comprehensiveErrors = validator.validate(ast);
-      for (const error of comprehensiveErrors) {
+      // Run AST validator
+      const validator = new AstValidator();
+      const astErrors = validator.validate(ast);
+      for (const error of astErrors) {
         if (error.type !== ErrType.Unused) {
           continue;
         }
@@ -231,201 +230,14 @@ export function activate(context: vscode.ExtensionContext) {
     }
   };
 
-  /**
-   * Helper to find regex match and create diagnostic
-   */
-  const findAndDiagnose = (
-    doc: vscode.TextDocument,
-    regex: RegExp,
-    message: string,
-    severity: vscode.DiagnosticSeverity = vscode.DiagnosticSeverity.Warning
-  ): vscode.Diagnostic | null => {
-    const text = doc.getText();
-    const match = regex.exec(text);
-    if (!match) return null;
-
-    const pos = doc.positionAt(match.index);
-    const endPos = pos.translate(0, Math.max(1, match[0].length));
-    return new vscode.Diagnostic(new vscode.Range(pos, endPos), message, severity);
-  };
-
-  /**
-   * Helper to find all regex matches and create diagnostics
-   */
-  const findAllAndDiagnose = (
-    doc: vscode.TextDocument,
-    regex: RegExp,
-    callback: (match: RegExpExecArray, doc: vscode.TextDocument) => vscode.Diagnostic | null
-  ): vscode.Diagnostic[] => {
-    const text = doc.getText();
-    const diags: vscode.Diagnostic[] = [];
-    let match: RegExpExecArray | null;
-
-    while ((match = regex.exec(text)) !== null) {
-      const diag = callback(match, doc);
-      if (diag) diags.push(diag);
-    }
-
-    return diags;
-  };
-
-  /**
-   * Run pattern-based validations
-   */
-  const runPatternValidation = (doc: vscode.TextDocument, diags: vscode.Diagnostic[]): void => {
-    const text = doc.getText();
-
-    // 1) Version header
-    if (!/^\s*\/\/\@version=6/m.test(text)) {
-      diags.push(new vscode.Diagnostic(
-        new vscode.Range(0, 0, 0, 1),
-        'Recommend using //@version=6 for Pine v6.',
-        vscode.DiagnosticSeverity.Warning
-      ));
-    }
-
-    // 2) input.timeframe suggestion
-    const timeframeDiag = findAndDiagnose(
-      doc,
-      /input\.string\s*\(\s*\"\d+\"\s*,\s*\"HTF/m,
-      'Use input.timeframe(...) for timeframe inputs in v6.'
-    );
-    if (timeframeDiag && !/input\.timeframe/m.test(text)) {
-      diags.push(timeframeDiag);
-    }
-
-    // 3) time()/session boolean usage
-    const timeDiag = findAndDiagnose(
-      doc,
-      /\btime\(timeframe\.period,\s*\w+\)/m,
-      'Wrap session checks as: not na(time(timeframe.period, session)) to avoid bool-NA pitfalls.'
-    );
-    if (timeDiag && !/not\s+na\(time\(timeframe\.period,/m.test(text)) {
-      diags.push(timeDiag);
-    }
-
-    // 4) ta.change in condition hint
-    const taChangeDiag = findAndDiagnose(
-      doc,
-      /ta\.change\s*\(/m,
-      'Consider assigning ta.change(...) to a variable before using in conditions for consistent evaluation.'
-    );
-    if (taChangeDiag && /\?\s*\(|\)\s*and|\)\s*or/.test(text)) {
-      diags.push(taChangeDiag);
-    }
-
-    // 5) timenow milliseconds reminder
-    const timenowDiag = findAndDiagnose(
-      doc,
-      /timenow\s*-\s*\w+\s*<=\s*\w+\s*\*\s*60(?!\s*\*\s*1000)/m,
-      'timenow is in milliseconds. Multiply seconds by 1000.'
-    );
-    if (timenowDiag) diags.push(timenowDiag);
-
-    // 6) Invalid functions (e.g., math.clamp)
-    const mathClampDiag = findAndDiagnose(
-      doc,
-      /\bmath\.clamp\b/,
-      'Pine v6: use math.min/math.max pattern; math.clamp is not available.'
-    );
-    if (mathClampDiag) diags.push(mathClampDiag);
-
-    // 7) plotshape with wrong parameter name (shape= instead of style=)
-    diags.push(...findAllAndDiagnose(
-      doc,
-      /plotshape\s*\([^)]*\bshape\s*=/g,
-      (match, doc) => {
-        const shapeIndex = match[0].indexOf('shape=');
-        const pos = doc.positionAt(match.index + shapeIndex);
-        const endPos = pos.translate(0, 6);
-        return new vscode.Diagnostic(
-          new vscode.Range(pos, endPos),
-          'Invalid parameter "shape". Did you mean "style"?',
-          vscode.DiagnosticSeverity.Error
-        );
-      }
-    ));
-
-    // 8) plotchar with wrong parameter name (shape= instead of char=)
-    diags.push(...findAllAndDiagnose(
-      doc,
-      /plotchar\s*\([^)]*\bshape\s*=/g,
-      (match, doc) => {
-        const shapeIndex = match[0].indexOf('shape=');
-        const pos = doc.positionAt(match.index + shapeIndex);
-        const endPos = pos.translate(0, 6);
-        return new vscode.Diagnostic(
-          new vscode.Range(pos, endPos),
-          'Invalid parameter "shape". Did you mean "char"?',
-          vscode.DiagnosticSeverity.Error
-        );
-      }
-    ));
-
-    // 9) timeframe_gaps without timeframe parameter
-    diags.push(...findAllAndDiagnose(
-      doc,
-      /(indicator|strategy)\s*\([^)]*timeframe_gaps\s*=\s*true[^)]*\)/g,
-      (match, doc) => {
-        const fullCall = match[0];
-        if (!/\btimeframe\s*=/.test(fullCall)) {
-          const gapsIndex = fullCall.indexOf('timeframe_gaps');
-          const pos = doc.positionAt(match.index + gapsIndex);
-          const endPos = pos.translate(0, 14);
-          return new vscode.Diagnostic(
-            new vscode.Range(pos, endPos),
-            '"timeframe_gaps" has no effect without a "timeframe" argument in indicator/strategy call',
-            vscode.DiagnosticSeverity.Warning
-          );
-        }
-        return null;
-      }
-    ));
-
-    // 10) alertcondition with too many arguments
-    diags.push(...findAllAndDiagnose(
-      doc,
-      /alertcondition\s*\(([^)]+)\)/g,
-      (match, doc) => {
-        const args = match[1].split(',').map(a => a.trim());
-        if (args.length > 3) {
-          const pos = doc.positionAt(match.index);
-          const endPos = pos.translate(0, 14);
-          return new vscode.Diagnostic(
-            new vscode.Range(pos, endPos),
-            `alertcondition() expects 3 parameters (condition, title, message), but got ${args.length}`,
-            vscode.DiagnosticSeverity.Error
-          );
-        }
-        return null;
-      }
-    ));
-
-    // 11) input.string() without required defval parameter
-    diags.push(...findAllAndDiagnose(
-      doc,
-      /input\.string\s*\(\s*\)/g,
-      (match, doc) => {
-        const pos = doc.positionAt(match.index);
-        const endPos = pos.translate(0, 12);
-        return new vscode.Diagnostic(
-          new vscode.Range(pos, endPos),
-          'input.string() requires at least one parameter: defval (default value)',
-          vscode.DiagnosticSeverity.Error
-        );
-      }
-    ));
-  };
-
   const runDiagnostics = (doc: vscode.TextDocument) => {
     if (doc.languageId !== 'pine') return;
     const text = doc.getText();
     const diags: vscode.Diagnostic[] = [];
 
     // Run all validation types
-    runAccurateValidation(text, diags);
-    runComprehensiveValidation(text, diags);
-    runPatternValidation(doc, diags);
+    runPatternValidation(text, diags);
+    runAstValidation(text, diags);
 
     diagCollection.set(doc.uri, diags);
   };

@@ -1,4 +1,4 @@
-// Comprehensive Pine Script Validator with Type Checking and Scope Analysis
+// AST-based Pine Script Validator with Type Checking and Scope Analysis
 import { Program, Statement, Expression, CallExpression, CallArgument, Identifier, Literal } from './ast';
 import { V6_FUNCTIONS, V6_NAMESPACES, PineItem } from '../../v6/v6-manual';
 import { PINE_FUNCTIONS_MERGED } from '../../v6/parameter-requirements-merged';
@@ -41,7 +41,7 @@ interface ParameterInfo {
   defaultValue?: string;
 }
 
-export class ComprehensiveValidator {
+export class AstValidator {
   private errors: ValidationError[] = [];
   private symbolTable: SymbolTable;
   private functionSignatures: Map<string, FunctionSignature> = new Map();

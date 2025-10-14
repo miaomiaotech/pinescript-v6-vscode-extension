@@ -6,31 +6,31 @@
 
 ## 架构设计
 
-### 分层验证策略
-验证系统采用三层验证架构，每层负责不同类型的检查：
+### 双层验证策略
+验证系统采用双层验证架构，每层负责不同类型的检查：
 
 ```typescript
 const runDiagnostics = (doc: vscode.TextDocument) => {
   if (doc.languageId !== 'pine') return;
+  const text = doc.getText();
   const diags: vscode.Diagnostic[] = [];
 
-  // 三层验证
-  runAccurateValidation(text, diags);        // 1. 函数参数验证
-  runComprehensiveValidation(text, diags);   // 2. AST 语义验证
-  runPatternValidation(doc, diags);          // 3. 正则模式验证
+  // 双层验证
+  runPatternValidation(text, diags);   // 1. 基于正则的快速验证
+  runAstValidation(text, diags);       // 2. 基于 AST 的深度验证
 
   diagCollection.set(doc.uri, diags);
 };
 ```
 
-### 1. AccurateValidator - 函数参数验证
-验证内置函数的参数使用是否正确：
+### 1. PatternValidator - 基于正则的快速验证
+使用正则表达式和官方验证的参数要求，验证内置函数的参数使用：
 
 ```typescript
-const runAccurateValidation = (text: string, diags: vscode.Diagnostic[]): void => {
+const runPatternValidation = (text: string, diags: vscode.Diagnostic[]): void => {
   try {
-    const accurateValidator = new AccurateValidator();  // ⚠️ 每次创建新实例
-    const errors = accurateValidator.validate(text);
+    const patternValidator = new PatternValidator();  // ⚠️ 每次创建新实例
+    const errors = patternValidator.validate(text);
 
     for (const error of errors) {
       const pos = new vscode.Position(error.line - 1, error.column - 1);
@@ -47,16 +47,22 @@ const runAccurateValidation = (text: string, diags: vscode.Diagnostic[]): void =
 };
 ```
 
+**特点**:
+- 基于正则表达式模式匹配
+- 使用完整的 v6 函数签名数据（6,665 项）
+- 验证必需参数、参数类型、命名空间成员等
+- 性能优秀，适合实时验证
+
 ⚠️ **关键点**:
 - 每次创建新的 validator 实例，避免状态污染
 - 捕获所有异常，防止扩展崩溃
 - 不使用 console.log/error（生产环境）
 
-### 2. ComprehensiveValidator - AST 语义验证
+### 2. AstValidator - 基于 AST 的深度验证
 基于 AST 的深度语义分析：
 
 ```typescript
-const runComprehensiveValidation = (text: string, diags: vscode.Diagnostic[]): void => {
+const runAstValidation = (text: string, diags: vscode.Diagnostic[]): void => {
   try {
     const parser = new Parser(text);
     const ast = parser.parse();
@@ -73,127 +79,52 @@ const runComprehensiveValidation = (text: string, diags: vscode.Diagnostic[]): v
     }
 
     // AST 验证
-    const validator = new ComprehensiveValidator();
-    const comprehensiveErrors = validator.validate(ast);
-    for (const error of comprehensiveErrors) {
+    const validator = new AstValidator();
+    const astErrors = validator.validate(ast);
+    for (const error of astErrors) {
       if (error.type !== ErrType.Unused) continue;
 
-      const diag = new vscode.Diagnostic(/* ... */);
+      const pos = new vscode.Position(error.line - 1, error.column - 1);
+      const endPos = pos.translate(0, error.length);
+      const range = new vscode.Range(pos, endPos);
+
+      const diag = new vscode.Diagnostic(
+        range,
+        error.message,
+        vscode.DiagnosticSeverity.Hint
+      );
       diag.tags = [vscode.DiagnosticTag.Unnecessary];  // 标记为"未使用"
       diags.push(diag);
     }
-  } catch (e) {
+  } catch (e: any) {
     // 解析错误已通过 getErrors() 收集
   }
 };
 ```
 
+**特点**:
+- 构建完整的抽象语法树
+- 符号表管理（作用域、变量追踪）
+- 未使用变量检测
+- 类型推断和类型检查
+- 函数签名验证
+
 ⚠️ **关键点**:
 - 必须使用 `parser.getErrors()` 获取解析错误
 - 为未使用变量添加 `DiagnosticTag.Unnecessary`
 - 不要依赖 catch 块处理解析错误
+- 只处理 `ErrType.Unused` 类型的错误（用于灰色显示未使用的变量）
 
-### 3. PatternValidation - 正则模式验证
-基于正则表达式的模式匹配验证：
+## 验证器功能对比
 
-```typescript
-const runPatternValidation = (doc: vscode.TextDocument, diags: vscode.Diagnostic[]): void => {
-  // 11 种验证规则
-  // 使用辅助函数简化代码
-};
-```
-
-## 辅助函数
-
-### findAndDiagnose - 单次匹配
-用于只需要找到第一个匹配的场景：
-
-```typescript
-const findAndDiagnose = (
-  doc: vscode.TextDocument,
-  regex: RegExp,
-  message: string,
-  severity: vscode.DiagnosticSeverity = vscode.DiagnosticSeverity.Warning
-): vscode.Diagnostic | null => {
-  const text = doc.getText();
-  const match = regex.exec(text);
-  if (!match) return null;
-
-  const pos = doc.positionAt(match.index);
-  const endPos = pos.translate(0, Math.max(1, match[0].length));
-  return new vscode.Diagnostic(new vscode.Range(pos, endPos), message, severity);
-};
-```
-
-**使用示例**:
-```typescript
-// 检查是否使用了不存在的函数
-const mathClampDiag = findAndDiagnose(
-  doc,
-  /\bmath\.clamp\b/,
-  'Pine v6: use math.min/math.max pattern; math.clamp is not available.'
-);
-if (mathClampDiag) diags.push(mathClampDiag);
-```
-
-### findAllAndDiagnose - 多次匹配
-用于需要找到所有匹配的场景：
-
-```typescript
-const findAllAndDiagnose = (
-  doc: vscode.TextDocument,
-  regex: RegExp,
-  callback: (match: RegExpExecArray, doc: vscode.TextDocument) => vscode.Diagnostic | null
-): vscode.Diagnostic[] => {
-  const text = doc.getText();
-  const diags: vscode.Diagnostic[] = [];
-  let match: RegExpExecArray | null;
-
-  while ((match = regex.exec(text)) !== null) {
-    const diag = callback(match, doc);
-    if (diag) diags.push(diag);
-  }
-
-  return diags;
-};
-```
-
-**使用示例**:
-```typescript
-// 检查所有 plotshape 调用
-diags.push(...findAllAndDiagnose(
-  doc,
-  /plotshape\s*\([^)]*\bshape\s*=/g,
-  (match, doc) => {
-    const shapeIndex = match[0].indexOf('shape=');
-    const pos = doc.positionAt(match.index + shapeIndex);
-    const endPos = pos.translate(0, 6);
-    return new vscode.Diagnostic(
-      new vscode.Range(pos, endPos),
-      'Invalid parameter "shape". Did you mean "style"?',
-      vscode.DiagnosticSeverity.Error
-    );
-  }
-));
-```
-
-## 验证规则列表
-
-当前实现的 11 种模式验证规则：
-
-| # | 规则 | 描述 | 严重性 |
-|---|------|------|--------|
-| 1 | Version header | 检查 `//@version=6` | Warning |
-| 2 | input.timeframe | 建议使用 `input.timeframe` | Warning |
-| 3 | time() session | `not na(time(...))` 用法 | Warning |
-| 4 | ta.change | 条件中的使用建议 | Warning |
-| 5 | timenow | 毫秒单位提醒 | Warning |
-| 6 | math.clamp | 不存在的函数 | Warning |
-| 7 | plotshape shape= | 应该用 `style=` | Error |
-| 8 | plotchar shape= | 应该用 `char=` | Error |
-| 9 | timeframe_gaps | 需要 `timeframe` 参数 | Warning |
-| 10 | alertcondition | 参数数量检查 | Error |
-| 11 | input.string() | 缺少必需参数 | Error |
+| 特性 | PatternValidator | AstValidator |
+|------|------------------|--------------|
+| 验证方式 | 正则表达式匹配 | AST 语法树分析 |
+| 性能 | 快速（毫秒级） | 较慢（需解析） |
+| 准确性 | 高（基于官方数据） | 极高（语义级别） |
+| 主要功能 | 函数参数验证、命名空间检查 | 未使用变量检测、类型检查 |
+| 数据来源 | v6 参数要求（6,665 项） | 符号表和类型推断 |
+| 适用场景 | 实时验证、语法检查 | 深度分析、代码质量 |
 
 ## 常见陷阱
 
@@ -202,27 +133,27 @@ diags.push(...findAllAndDiagnose(
 1. **使用单例 Validator**
 ```typescript
 // ❌ 错误：可能导致状态污染
-const accurateValidator = new AccurateValidator();
+const patternValidator = new PatternValidator();
 
 const runDiagnostics = (doc) => {
-  accurateValidator.validate(text);  // 复用同一实例
+  patternValidator.validate(text);  // 复用同一实例
 };
 
 // ✅ 正确：每次创建新实例
-const runAccurateValidation = (text, diags) => {
-  const accurateValidator = new AccurateValidator();  // 新实例
-  accurateValidator.validate(text);
+const runPatternValidation = (text, diags) => {
+  const patternValidator = new PatternValidator();  // 新实例
+  patternValidator.validate(text);
 };
 ```
 
 2. **不捕获验证异常**
 ```typescript
 // ❌ 错误：异常会导致扩展崩溃
-const errors = accurateValidator.validate(text);
+const errors = patternValidator.validate(text);
 
 // ✅ 正确：捕获所有异常
 try {
-  const errors = accurateValidator.validate(text);
+  const errors = patternValidator.validate(text);
 } catch (e) {
   // 验证错误是预期的
 }
@@ -252,13 +183,40 @@ const ast = parser.parse();
 const parserErrors = parser.getErrors();  // 获取所有解析错误
 ```
 
-5. **正则表达式不使用 /g 标志**
+5. **忘记处理参数表达式中的变量使用**
 ```typescript
-// ❌ 错误：findAllAndDiagnose 需要全局匹配
-findAllAndDiagnose(doc, /pattern/, callback);  // 只匹配一次
+// ❌ 错误：在签名检查后验证参数（导致用户定义函数的参数未被标记为已使用）
+private validateCallExpression(call: CallExpression): void {
+  this.validateExpression(call.callee);
 
-// ✅ 正确：使用 /g 标志
-findAllAndDiagnose(doc, /pattern/g, callback);  // 匹配所有
+  const signature = this.functionSignatures.get(functionName);
+  if (!signature) {
+    return;  // 提前返回，参数未被验证！
+  }
+
+  // 验证参数（但用户定义函数永远到不了这里）
+  for (const arg of call.arguments) {
+    this.validateExpression(arg.value);
+  }
+}
+
+// ✅ 正确：在签名检查前验证参数
+private validateCallExpression(call: CallExpression): void {
+  this.validateExpression(call.callee);
+
+  // 始终验证参数表达式（标记变量为已使用）
+  for (const arg of call.arguments) {
+    this.validateExpression(arg.value);
+  }
+
+  const signature = this.functionSignatures.get(functionName);
+  if (!signature) {
+    return;  // 现在可以安全返回了
+  }
+
+  // 验证签名
+  this.validateFunctionArguments(call, functionName, signature);
+}
 ```
 
 ## 位置信息处理
@@ -301,51 +259,65 @@ diag.tags = [vscode.DiagnosticTag.Deprecated];
 
 ## 扩展性
 
-### 添加新的模式验证规则
+### 向 PatternValidator 添加新规则
 
-在 `runPatternValidation()` 中添加：
+在 `src/parser/patternValidator.ts` 中的 `validate()` 方法添加新的检查逻辑：
 
 ```typescript
-const runPatternValidation = (doc: vscode.TextDocument, diags: vscode.Diagnostic[]): void => {
-  // ... 现有规则 ...
+export class PatternValidator {
+  validate(text: string): ValidationError[] {
+    const errors: ValidationError[] = [];
 
-  // 12) 新规则：检查 strategy.exit 的使用
-  diags.push(...findAllAndDiagnose(
-    doc,
-    /strategy\.exit\s*\([^)]*\)/g,
-    (match, doc) => {
-      // 自定义验证逻辑
-      if (/* 条件 */) {
-        const pos = doc.positionAt(match.index);
-        return new vscode.Diagnostic(
-          new vscode.Range(pos, pos.translate(0, 13)),
-          'Message',
-          vscode.DiagnosticSeverity.Warning
-        );
-      }
-      return null;
+    // ... 现有验证逻辑 ...
+
+    // 添加新的自定义检查
+    this.checkCustomRule(text, errors);
+
+    return errors;
+  }
+
+  private checkCustomRule(text: string, errors: ValidationError[]): void {
+    // 实现自定义验证规则
+    const pattern = /your_pattern/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = pattern.exec(text)) !== null) {
+      errors.push({
+        line: this.getLineNumber(text, match.index),
+        column: this.getColumnNumber(text, match.index),
+        length: match[0].length,
+        message: 'Your error message',
+        severity: vscode.DiagnosticSeverity.Warning
+      });
     }
-  ));
-};
+  }
+}
 ```
 
-### 创建新的验证器
+### 向 AstValidator 添加新的语义检查
 
-如果需要新的验证层：
+在 `src/parser/astValidator.ts` 中添加新的验证方法：
 
 ```typescript
-const runCustomValidation = (
-  doc: vscode.TextDocument,
-  diags: vscode.Diagnostic[]
-): void => {
-  // 自定义验证逻辑
-};
+export class AstValidator {
+  validate(ast: Program): ValidationError[] {
+    // ... 现有逻辑 ...
 
-const runDiagnostics = (doc: vscode.TextDocument) => {
-  // ...
-  runCustomValidation(doc, diags);  // 添加新验证层
-  diagCollection.set(doc.uri, diags);
-};
+    // 添加新的语义检查
+    this.checkCustomSemantics(ast);
+
+    return this.errors;
+  }
+
+  private checkCustomSemantics(ast: Program): void {
+    // 遍历 AST 执行自定义检查
+    for (const node of ast.body) {
+      if (node.type === 'YourNodeType') {
+        // 执行检查逻辑
+      }
+    }
+  }
+}
 ```
 
 ## 性能考虑
@@ -364,13 +336,20 @@ if (/pattern1/.test(text) && /pattern2/.test(text)) {
 }
 ```
 
-### 2. 条件验证
+### 2. 避免重复创建验证器实例
 ```typescript
-// 只在必要时执行昂贵的正则匹配
-const timeframeDiag = findAndDiagnose(doc, /complex_regex/, 'Message');
-if (timeframeDiag && !someOtherCondition) {  // 先检查简单条件
-  diags.push(timeframeDiag);
+// ❌ 低效：在循环中创建
+for (const doc of documents) {
+  const validator = new PatternValidator();  // 每次都创建
+  validator.validate(doc.getText());
 }
+
+// ✅ 高效：在函数调用时创建一次
+const runPatternValidation = (text: string, diags: vscode.Diagnostic[]): void => {
+  const patternValidator = new PatternValidator();  // 只创建一次
+  const errors = patternValidator.validate(text);
+  // ...
+};
 ```
 
 ### 3. 提前返回
@@ -383,25 +362,66 @@ const runDiagnostics = (doc: vscode.TextDocument) => {
 
 ## 测试建议
 
-### 单元测试结构
+### PatternValidator 单元测试
 ```typescript
-describe('runAccurateValidation', () => {
+describe('PatternValidator', () => {
   it('should detect invalid parameters', () => {
-    const diags: vscode.Diagnostic[] = [];
+    const validator = new PatternValidator();
     const code = 'plot(close, invalid_param=true)';
-    runAccurateValidation(code, diags);
+    const errors = validator.validate(code);
 
-    expect(diags.length).toBeGreaterThan(0);
-    expect(diags[0].message).toContain('invalid_param');
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0].message).toContain('invalid_param');
   });
 
   it('should not crash on malformed code', () => {
-    const diags: vscode.Diagnostic[] = [];
+    const validator = new PatternValidator();
     const code = 'plot(((((';
 
     expect(() => {
-      runAccurateValidation(code, diags);
+      validator.validate(code);
     }).not.toThrow();
+  });
+});
+```
+
+### AstValidator 单元测试
+```typescript
+describe('AstValidator', () => {
+  it('should detect unused variables', () => {
+    const code = `
+      //@version=5
+      indicator("Test")
+      unused_var = 1
+      x = 2
+      plot(x)
+    `;
+    const parser = new Parser(code);
+    const ast = parser.parse();
+    const validator = new AstValidator();
+    const errors = validator.validate(ast);
+
+    const unusedErrors = errors.filter(e => e.type === ErrType.Unused);
+    expect(unusedErrors.length).toBe(1);
+    expect(unusedErrors[0].message).toContain('unused_var');
+  });
+
+  it('should mark variables used in function arguments', () => {
+    const code = `
+      //@version=5
+      indicator("Test")
+      value = close
+      detect(value, 14)
+    `;
+    const parser = new Parser(code);
+    const ast = parser.parse();
+    const validator = new AstValidator();
+    const errors = validator.validate(ast);
+
+    const unusedErrors = errors.filter(e =>
+      e.type === ErrType.Unused && e.message.includes('value')
+    );
+    expect(unusedErrors.length).toBe(0);  // value 应该被标记为已使用
   });
 });
 ```
@@ -409,18 +429,19 @@ describe('runAccurateValidation', () => {
 ### 集成测试
 ```typescript
 describe('runDiagnostics', () => {
-  it('should combine all validators', () => {
+  it('should combine both validators', () => {
     const doc = createMockDocument(`
-      // Missing version
+      //@version=5
       indicator("Test")
-      x = math.clamp(1, 0, 10)
-      plotshape(close, shape=shape.circle)
+      unused = 1
+      plot(close, invalid_param=true)
     `);
 
     runDiagnostics(doc);
     const diags = diagCollection.get(doc.uri);
 
-    expect(diags.length).toBe(3);  // version + math.clamp + plotshape
+    // 应该有两个错误：unused variable + invalid parameter
+    expect(diags.length).toBeGreaterThanOrEqual(2);
   });
 });
 ```
@@ -429,11 +450,67 @@ describe('runDiagnostics', () => {
 
 Pine Script v6 验证系统遵循以下原则：
 
-1. ✅ **分层架构**: 三层验证，职责分离
-2. ✅ **可靠性**: 完善的异常处理，避免扩展崩溃
-3. ✅ **可维护性**: 模块化设计，代码复用
-4. ✅ **可扩展性**: 易于添加新规则和验证器
-5. ✅ **性能**: 优化正则匹配，减少重复计算
-6. ✅ **无状态**: 每次验证创建新实例
+1. ✅ **双层架构**:
+   - **PatternValidator**: 基于正则的快速验证（函数参数、命名空间）
+   - **AstValidator**: 基于 AST 的深度验证（未使用变量、类型检查）
+
+2. ✅ **职责分离**:
+   - PatternValidator 负责语法级别的快速检查
+   - AstValidator 负责语义级别的深度分析
+
+3. ✅ **可靠性**:
+   - 完善的异常处理，避免扩展崩溃
+   - 正确处理解析错误（parser.getErrors()）
+
+4. ✅ **正确性**:
+   - 参数验证在签名检查前执行，确保所有变量使用都被追踪
+   - 解构变量位置精确追踪（DestructuringVariable）
+   - 函数参数位置精确追踪
+
+5. ✅ **可维护性**:
+   - 清晰的命名（PatternValidator、AstValidator）
+   - 模块化设计，代码复用
+   - 完善的文档和注释
+
+6. ✅ **可扩展性**:
+   - 易于添加新规则和验证器
+   - 支持自定义验证逻辑
+
+7. ✅ **性能**:
+   - PatternValidator 提供毫秒级快速验证
+   - 缓存文本避免重复读取
+   - 提前返回减少不必要的计算
+
+8. ✅ **无状态**:
+   - 每次验证创建新实例，避免状态污染
 
 遵循这些注意事项，可以确保验证系统稳定可靠、易于维护和扩展。
+
+## 关键 Bug 修复记录
+
+### 1. 变量在函数参数中使用未被标记（已修复）
+**问题**: 用户定义函数的参数中使用的变量被报告为"未使用"。
+
+**原因**: 在 `AstValidator.validateCallExpression()` 中，参数表达式验证在签名检查之后。对于用户定义的函数（无签名），方法提前返回，参数表达式未被验证。
+
+**修复**: 将参数表达式验证移到签名检查之前，确保所有函数调用的参数都被验证。
+
+参见：`src/parser/astValidator.ts:702-734`
+
+### 2. 解构变量位置不准确（已修复）
+**问题**: 解构赋值中的所有变量都指向左括号位置，而不是变量名位置。
+
+**原因**: `DestructuringAssignment` 节点只存储变量名数组，不存储每个变量的位置信息。
+
+**修复**: 添加 `DestructuringVariable` 接口存储每个变量的 line/column 信息。
+
+参见：`src/parser/ast.ts:DestructuringVariable`、`src/parser/parser.ts`
+
+### 3. 函数参数位置不准确（已修复）
+**问题**: 参数的"Go to Definition"跳转到函数名位置，而不是参数位置。
+
+**原因**: 参数符号使用函数声明的位置。
+
+**修复**: 在解析函数声明时捕获每个参数的 token 位置。
+
+参见：`src/parser/parser.ts:parseFunctionDeclaration()`

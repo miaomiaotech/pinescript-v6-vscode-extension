@@ -106,10 +106,11 @@
     ]
   },
   "scripts": {
-    "clean": "rm -rf dist && rm -rf build",
+    "clean": "rm -rf dist; rm -rf build",
     "build": "node esbuild.js",
+    "build:tsc": "tsc -p .",
     "watch": "tsc -w -p .",
-    "package": "npm run clean && npm run build && mkdir -p build && vsce package --no-dependencies -o build/pinescript-v6-extension.vsix"
+    "package": "npm run clean; npm run build && mkdir -p build && vsce package --no-dependencies -o build/pinescript-v6-extension.vsix"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.19.1",

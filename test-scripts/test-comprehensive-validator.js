@@ -10,9 +10,9 @@ Module.prototype.require = function(id) {
 
 const fs = require('fs');
 const { Parser } = require('../dist/src/parser/parser.js');
-const { ComprehensiveValidator } = require('../dist/src/parser/comprehensiveValidator.js');
+const { AstValidator } = require('../dist/src/parser/astValidator.js');
 
-console.log('=== Testing ComprehensiveValidator on actual Pine file ===\n');
+console.log('=== Testing AstValidator on actual Pine file ===\n');
 
 const filePath = './samples/通用顶底检测函数.pine';
 const code = fs.readFileSync(filePath, 'utf-8');
@@ -20,7 +20,7 @@ const code = fs.readFileSync(filePath, 'utf-8');
 const parser = new Parser(code);
 const ast = parser.parse();
 
-const validator = new ComprehensiveValidator();
+const validator = new AstValidator();
 const errors = validator.validate(ast);
 
 console.log(`Total errors: ${errors.length}\n`);

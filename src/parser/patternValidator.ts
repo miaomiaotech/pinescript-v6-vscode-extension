@@ -1,6 +1,6 @@
 /**
- * Accurate Pine Script v6 Validator
- * Uses officially verified parameter requirements from parameter-requirements.ts
+ * Pattern-based Pine Script v6 Validator
+ * Uses regex patterns and officially verified parameter requirements
  * Complete v6 language support (6,665 items)
  */
 
@@ -25,7 +25,7 @@ export interface ValidationError {
   severity: vscode.DiagnosticSeverity;
 }
 
-export class AccurateValidator {
+export class PatternValidator {
   private errors: ValidationError[] = [];
 
   // Complete v6 namespace support (31 constant + 21 variable + 22 function namespaces)

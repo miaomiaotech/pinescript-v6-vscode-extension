@@ -9,7 +9,7 @@ Module.prototype.require = function(id) {
 };
 
 const { Parser } = require('../dist/src/parser/parser.js');
-const { ComprehensiveValidator } = require('../dist/src/parser/comprehensiveValidator.js');
+const { AstValidator } = require('../dist/src/parser/astValidator.js');
 const fs = require('fs');
 
 const code = fs.readFileSync('test-scripts/test-unused-vars.pine', 'utf8');
@@ -26,7 +26,7 @@ console.log(`解析结果:`);
 console.log(`  AST 节点数: ${ast.body.length}`);
 console.log(`  解析错误: ${parserErrors.length}\n`);
 
-const validator = new ComprehensiveValidator();
+const validator = new AstValidator();
 const errors = validator.validate(ast);
 
 console.log(`验证结果:`);
