@@ -14,6 +14,7 @@ import { PatternValidator } from './parser/patternValidator';
 import { DefinitionProvider } from './definitionProvider';
 import { RenameProvider } from './renameProvider';
 import { ReferenceProvider } from './referenceProvider';
+import { PineColorProvider } from './colorProvider';
 
 export function activate(context: vscode.ExtensionContext) {
   // Optional: ensure files.associations maps *.pine -> pine
@@ -304,6 +305,14 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.languages.registerReferenceProvider(
       { language: 'pine', scheme: 'file' },
       new ReferenceProvider()
+    )
+  );
+
+  // Color Provider - Show color previews for hex colors and color.* constants
+  context.subscriptions.push(
+    vscode.languages.registerColorProvider(
+      { language: 'pine', scheme: 'file' },
+      new PineColorProvider()
     )
   );
 }

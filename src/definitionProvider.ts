@@ -7,10 +7,11 @@ export class DefinitionProvider implements vscode.DefinitionProvider {
         position: vscode.Position,
         token: vscode.CancellationToken
     ): vscode.ProviderResult<vscode.Definition> {
-        
+
         const symbolInfo = getSymbolInfoAtPosition(document, position);
 
         if (!symbolInfo) {
+            // For built-in functions/variables, return null so hover provider can show docs
             return null;
         }
 
