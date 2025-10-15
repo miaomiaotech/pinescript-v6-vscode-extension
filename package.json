@@ -116,9 +116,10 @@
     "build:tsc": "tsc -p .",
     "watch": "tsc -w -p .",
     "package": "npm run build:es && mkdir -p build && vsce package --no-dependencies -o build/pinescript-v6-extension.vsix",
-    "test": "npm run test:lexer && npm run test:parser",
+    "test": "npm run test:lexer && npm run test:parser && npm run test:syntax",
     "test:lexer": "node --test test/lexer.test.js",
-    "test:parser": "node --test test/parser.test.js"
+    "test:parser": "node --test test/parser.test.js",
+    "test:syntax": "node --test test/syntax-examples.test.js"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.19.1",
