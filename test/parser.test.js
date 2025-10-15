@@ -336,6 +336,122 @@ describe('AST 解析器 - 函数调用', () => {
     assert.strictEqual(arg.type, 'CallExpression');
     assert.strictEqual(arg.callee.type, 'MemberExpression');
   });
+
+  test('多行函数调用（基于缩进的延续）', () => {
+    const source = `plot(
+  plFound ? osc[lbR] : na,
+  offset=-lbR,
+  title="Regular Bullish",
+  linewidth=2,
+  color=(bullCond ? bullColor : noneColor),
+  display = display.pane,
+  editable = plotBull
+  )`;
+    const ast = parse(source);
+    const simplified = simplifyNode(ast);
+
+    const expr = simplified.body[0].expression;
+    assert.strictEqual(expr.type, 'CallExpression');
+    assert.strictEqual(expr.callee.name, 'plot');
+    assert.strictEqual(expr.arguments.length, 7);
+
+    // 检查第一个位置参数
+    assert.strictEqual(expr.arguments[0].name, undefined);
+    assert.strictEqual(expr.arguments[0].value.type, 'TernaryExpression');
+
+    // 检查具名参数
+    assert.strictEqual(expr.arguments[1].name, 'offset');
+    assert.strictEqual(expr.arguments[2].name, 'title');
+    assert.strictEqual(expr.arguments[3].name, 'linewidth');
+    assert.strictEqual(expr.arguments[4].name, 'color');
+    assert.strictEqual(expr.arguments[5].name, 'display');
+    assert.strictEqual(expr.arguments[6].name, 'editable');
+  });
+
+  test('多行函数调用（混合位置和具名参数）', () => {
+    const source = `ta.sma(
+  close,
+  20,
+  offset=1
+  )`;
+    const ast = parse(source);
+    const simplified = simplifyNode(ast);
+
+    const expr = simplified.body[0].expression;
+    assert.strictEqual(expr.type, 'CallExpression');
+    assert.strictEqual(expr.arguments.length, 3);
+
+    // 前两个是位置参数
+    assert.strictEqual(expr.arguments[0].name, undefined);
+    assert.strictEqual(expr.arguments[0].value.type, 'Identifier');
+    assert.strictEqual(expr.arguments[1].name, undefined);
+    assert.strictEqual(expr.arguments[1].value.type, 'Literal');
+
+    // 第三个是具名参数
+    assert.strictEqual(expr.arguments[2].name, 'offset');
+    assert.strictEqual(expr.arguments[2].value.value, 1);
+  });
+
+  test('嵌套的多行函数调用', () => {
+    const source = `plot(
+  ta.sma(
+     close,
+     20
+  ),
+  color=color.red
+  )`;
+    const ast = parse(source);
+    const simplified = simplifyNode(ast);
+
+    const expr = simplified.body[0].expression;
+    assert.strictEqual(expr.type, 'CallExpression');
+    assert.strictEqual(expr.callee.name, 'plot');
+    assert.strictEqual(expr.arguments.length, 2);
+
+    // 第一个参数是嵌套的函数调用
+    const nestedCall = expr.arguments[0].value;
+    assert.strictEqual(nestedCall.type, 'CallExpression');
+    assert.strictEqual(nestedCall.callee.type, 'MemberExpression');
+    assert.strictEqual(nestedCall.arguments.length, 2);
+
+    // 第二个参数是具名参数
+    assert.strictEqual(expr.arguments[1].name, 'color');
+  });
+
+  test('多行函数调用（缩进可以变化，只要非4倍数）', () => {
+    const source = `plot(
+  ta.sma(
+ close,
+     20
+  ),
+  color=color.red
+ )`;
+    const ast = parse(source);
+    const simplified = simplifyNode(ast);
+
+    const expr = simplified.body[0].expression;
+    assert.strictEqual(expr.type, 'CallExpression');
+    assert.strictEqual(expr.callee.name, 'plot');
+    assert.strictEqual(expr.arguments.length, 2);
+
+    // 嵌套调用也正确解析
+    const nestedCall = expr.arguments[0].value;
+    assert.strictEqual(nestedCall.type, 'CallExpression');
+    assert.strictEqual(nestedCall.arguments.length, 2);
+  });
+
+  test('多行函数调用（1个空格缩进）', () => {
+    const source = `plot(
+ close,
+ title = "Test"
+ )`;
+    const ast = parse(source);
+    const simplified = simplifyNode(ast);
+
+    const expr = simplified.body[0].expression;
+    assert.strictEqual(expr.type, 'CallExpression');
+    assert.strictEqual(expr.arguments.length, 2);
+  });
 });
 
 describe('AST 解析器 - 成员访问', () => {

@@ -743,8 +743,14 @@ export class Parser {
   private finishCall(callee: AST.Expression): AST.CallExpression {
     const args: AST.CallArgument[] = [];
 
+    // Skip continuation newlines after opening paren
+    this.skipContinuationNewlines(0);
+
     if (!this.check(TokenType.RPAREN)) {
       do {
+        // Skip continuation newlines before each argument
+        this.skipContinuationNewlines(0);
+
         // Check for named argument: name = value
         // Allow both IDENTIFIER and KEYWORD as parameter names (Pine Script uses keywords like 'color', 'title', etc. as parameter names)
         if ((this.check(TokenType.IDENTIFIER) || this.check(TokenType.KEYWORD)) && this.peekNext()?.type === TokenType.ASSIGN) {
@@ -757,9 +763,14 @@ export class Parser {
           const value = this.expression();
           args.push({ value });
         }
+
+        // Skip continuation newlines after argument
+        this.skipContinuationNewlines(0);
       } while (this.match(TokenType.COMMA));
     }
 
+    // Skip continuation newlines before closing paren
+    this.skipContinuationNewlines(0);
     const endToken = this.consume(TokenType.RPAREN, 'Expected ")" after arguments');
 
     return {
@@ -931,6 +942,50 @@ export class Parser {
     }
 
     return body;
+  }
+
+  /**
+   * Skip newlines that are line continuations (based on indentation)
+   *
+   * PineScript line wrapping rule:
+   * A line is a continuation if its indentation is NOT a multiple of 4.
+   * Multiples of 4 (0, 4, 8, 12, ...) are used for local blocks.
+   * Non-multiples (1, 2, 3, 5, 6, 7, 9, ...) indicate line continuations.
+   */
+  private skipContinuationNewlines(baseIndent: number): void {
+    while (this.check(TokenType.NEWLINE) && !this.isAtEnd()) {
+      // Peek ahead to see the next non-newline token
+      const nextNonNewlineIndex = this.findNextNonNewlineIndex();
+      if (nextNonNewlineIndex === -1) {
+        // No more tokens, don't skip
+        break;
+      }
+
+      const nextToken = this.tokens[nextNonNewlineIndex];
+      const nextIndent = nextToken.indent ?? 0;
+
+      // Line continuation: indentation is NOT a multiple of 4
+      if (nextIndent % 4 !== 0) {
+        this.advance(); // skip the newline - this is a line continuation
+      } else {
+        // Indentation is a multiple of 4 - this is a new statement/block
+        break;
+      }
+    }
+  }
+
+  /**
+   * Find the index of the next non-newline token
+   */
+  private findNextNonNewlineIndex(): number {
+    let index = this.current + 1;
+    while (index < this.tokens.length) {
+      if (this.tokens[index].type !== TokenType.NEWLINE) {
+        return index;
+      }
+      index++;
+    }
+    return -1; // No non-newline token found
   }
 
   // Utility methods
