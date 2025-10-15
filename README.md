@@ -22,11 +22,20 @@
 
 ## 安装
 
-1.  从 [Releases](https://github.com/miaomiaotech/pinescript-v6-vscode-extension/releases) 页面下载最新的 `.vsix` 文件。
-2.  打开 VS Code。
-3.  选择 **查看 > 扩展** (或 `Ctrl+Shift+X`)。
-4.  点击扩展视图顶部的 `...` 菜单，然后选择 **从 VSIX 安装...**。
-5.  找到并选择您下载的 `.vsix` 文件进行安装。
+### 方式 1: 从 VSCode Marketplace 安装（推荐）
+
+1.  打开 VS Code
+2.  选择 **查看 > 扩展** (或按 `Ctrl+Shift+X` / `Cmd+Shift+X`)
+3.  搜索 "Pine Script Language v6"
+4.  点击 **安装**
+
+### 方式 2: 从 VSIX 文件安装
+
+1.  从 [Releases](https://github.com/miaomiaotech/pinescript-v6-vscode-extension/releases) 页面下载最新的 `.vsix` 文件
+2.  打开 VS Code
+3.  选择 **查看 > 扩展** (或 `Ctrl+Shift+X`)
+4.  点击扩展视图顶部的 `...` 菜单，然后选择 **从 VSIX 安装...**
+5.  找到并选择您下载的 `.vsix` 文件进行安装
 
 ## 使用说明
 
@@ -47,11 +56,13 @@
 *   `pine.httpSuggestions.endpoint`: 建议提供程序的 HTTP(S) 端点 (默认: `https://localhost:11434/suggest`)。
 *   `pine.httpSuggestions.timeoutMs`: 请求超时时间（毫秒）(默认: `1200`)。
 
-## 参与开发
+### 开发
 
 *   克隆仓库: `git clone https://github.com/miaomiaotech/pinescript-v6-vscode-extension.git`
 *   安装依赖: `pnpm install`
-*   运行扩展: `pnpm run watch` 并在 VS Code 中按 `F5`。
+*   运行测试: `pnpm test`
+*   开发模式: `pnpm run watch` 并在 VS Code 中按 `F5`
+*   打包扩展: `pnpm run package`
 
 ## 许可证
 

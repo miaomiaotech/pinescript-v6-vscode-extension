@@ -1,0 +1,46 @@
+# 更新日志
+
+## [0.1.3] - 2025-10-15
+
+### 新增
+- 支持复合赋值操作符（`+=`, `-=`, `*=`, `/=`, `%=`）
+- 支持重复定义检测
+- 支持 `for..in` 循环语法
+- 支持多行函数调用的行延续（line wrapping）
+- 完善语法测试覆盖
+
+## [0.1.2] - 2025-10-15
+
+### 新增
+- 类型推断功能（type inference）
+- 颜色预览提供者（color provider）
+- 移除未使用的变量
+
+## [0.1.1] - 2025-10-15
+
+### 改进
+- 代码优化和精简
+
+## [0.1.0] - 初始版本
+
+### 新增
+
+- 完整的 Pine Script v6 语法高亮
+- 智能代码补全（IntelliSense）
+- 函数签名帮助
+- 悬停文档显示
+- 转到定义功能
+- 查找所有引用
+- 符号重命名
+- 实时语法验证和诊断
+
+### 命令
+
+- `pine.validate` - 验证当前文件
+- `pine.showDocs` - 显示符号文档
+
+### 配置
+- `pine.applyFileAssociation` - 自动关联 .pine 文件类型
+- `pine.httpSuggestions.enabled` - 启用 HTTP AI 补全钩子
+- `pine.httpSuggestions.endpoint` - AI 补全端点
+- `pine.httpSuggestions.timeoutMs` - 请求超时设置
