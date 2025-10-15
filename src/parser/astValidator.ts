@@ -693,12 +693,16 @@ export class AstValidator {
           });
         }
 
-        // Validate range expressions
-        if ('from' in statement) {
+        // Validate range expressions for traditional for loop
+        if (statement.from) {
           this.validateExpression(statement.from);
         }
-        if ('to' in statement) {
+        if (statement.to) {
           this.validateExpression(statement.to);
+        }
+        // Validate iterable expression for for-in loop
+        if (statement.iterable) {
+          this.validateExpression(statement.iterable);
         }
 
         // Collect declarations first

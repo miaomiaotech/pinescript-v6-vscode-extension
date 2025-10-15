@@ -434,6 +434,37 @@ else
     assert.strictEqual(whileStmt.condition.type, 'BinaryExpression');
     assert.strictEqual(whileStmt.body.length, 1);
   });
+
+  test('for-in 循环', () => {
+    const source = `periods_to_calc = array.from(9, 14, 21, 34, 55, 89)
+
+for period in periods_to_calc
+    x = period`;
+    const ast = parse(source);
+    const simplified = simplifyNode(ast);
+
+    const forStmt = simplified.body[1];
+    assert.strictEqual(forStmt.type, 'ForStatement');
+    assert.strictEqual(forStmt.iterator, 'period');
+    assert.strictEqual(forStmt.iterable.type, 'Identifier');
+    assert.strictEqual(forStmt.iterable.name, 'periods_to_calc');
+    assert.strictEqual(forStmt.from, undefined);
+    assert.strictEqual(forStmt.to, undefined);
+    assert.strictEqual(forStmt.body.length, 1);
+  });
+
+  test('for-in 循环遍历数组字面量', () => {
+    const source = 'for item in [1, 2, 3]\n    plot(item)';
+    const ast = parse(source);
+    const simplified = simplifyNode(ast);
+
+    const forStmt = simplified.body[0];
+    assert.strictEqual(forStmt.type, 'ForStatement');
+    assert.strictEqual(forStmt.iterator, 'item');
+    assert.strictEqual(forStmt.iterable.type, 'ArrayExpression');
+    assert.strictEqual(forStmt.iterable.elements.length, 3);
+    assert.strictEqual(forStmt.body.length, 1);
+  });
 });
 
 describe('AST 解析器 - 函数定义', () => {

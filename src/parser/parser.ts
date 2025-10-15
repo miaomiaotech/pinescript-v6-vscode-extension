@@ -375,26 +375,44 @@ export class Parser {
 
   private forStatement(startToken: Token): AST.ForStatement {
     const iterator = this.consume(TokenType.IDENTIFIER, 'Expected iterator variable').value;
-    this.consume(TokenType.ASSIGN, 'Expected "=" in for loop');
-    const from = this.expression();
-    this.match([TokenType.KEYWORD, ['to']]); // optional 'to' keyword
-    const to = this.expression();
 
-    // Parse loop body
-    const body = this.parseIndentedBlock(startToken);
+    // Check for 'in' keyword (for-in loop) or '=' (traditional for loop)
+    if (this.match([TokenType.KEYWORD, ['in']])) {
+      // For-in loop: for item in array
+      const iterable = this.expression();
+      const body = this.parseIndentedBlock(startToken);
+      const endToken = body.length > 0 ? this.previous() : this.tokens[this.current - 1];
 
-    const endToken = body.length > 0 ? this.previous() : this.tokens[this.current - 1];
+      return {
+        type: 'ForStatement',
+        iterator,
+        iterable,
+        body,
+        line: startToken.line,
+        column: startToken.column,
+        range: new Range(this.tokenRange(startToken).start, this.tokenRange(endToken).end),
+      };
+    } else {
+      // Traditional for loop: for i = 0 to 10
+      this.consume(TokenType.ASSIGN, 'Expected "=" in for loop');
+      const from = this.expression();
+      this.match([TokenType.KEYWORD, ['to']]); // optional 'to' keyword
+      const to = this.expression();
 
-    return {
-      type: 'ForStatement',
-      iterator,
-      from,
-      to,
-      body,
-      line: startToken.line,
-      column: startToken.column,
-      range: new Range(this.tokenRange(startToken).start, this.tokenRange(endToken).end),
-    };
+      const body = this.parseIndentedBlock(startToken);
+      const endToken = body.length > 0 ? this.previous() : this.tokens[this.current - 1];
+
+      return {
+        type: 'ForStatement',
+        iterator,
+        from,
+        to,
+        body,
+        line: startToken.line,
+        column: startToken.column,
+        range: new Range(this.tokenRange(startToken).start, this.tokenRange(endToken).end),
+      };
+    }
   }
 
   private whileStatement(startToken: Token): AST.WhileStatement {

@@ -83,6 +83,7 @@ const KEYWORDS = new Set([
   'series', 'simple', 'input',
   'then',
   'to',
+  'in',  // for...in loop
 ]);
 
 // Map of single-character tokens for cleaner code

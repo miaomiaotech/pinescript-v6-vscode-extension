@@ -102,8 +102,11 @@ export interface IfStatement extends ASTNode {
 export interface ForStatement extends ASTNode {
   type: 'ForStatement';
   iterator: string;
-  from: Expression;
-  to: Expression;
+  // Traditional for loop: for i = 0 to 10
+  from?: Expression;
+  to?: Expression;
+  // For-in loop: for item in array
+  iterable?: Expression;
   body: Statement[];
 }
 

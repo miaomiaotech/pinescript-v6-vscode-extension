@@ -226,9 +226,18 @@ export class AstVisitor {
     }
 
     private visitForStatement(node: AST.ForStatement) {
-        this.visit(node.from);
-        this.visit(node.to);
-        
+        // Visit range expressions for traditional for loop
+        if (node.from) {
+            this.visit(node.from);
+        }
+        if (node.to) {
+            this.visit(node.to);
+        }
+        // Visit iterable expression for for-in loop
+        if (node.iterable) {
+            this.visit(node.iterable);
+        }
+
         this.symbolTable.enterScope();
         const forScope = this.symbolTable.getCurrentScope();
         this.scopeMap.set(node, forScope);
