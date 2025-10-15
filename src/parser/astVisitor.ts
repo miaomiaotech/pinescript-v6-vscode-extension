@@ -23,6 +23,9 @@ export class AstVisitor {
             case 'AssignmentStatement':
                 this.visitAssignmentStatement(node as AST.AssignmentStatement);
                 break;
+            case 'CompoundAssignmentStatement':
+                this.visitCompoundAssignmentStatement(node as AST.CompoundAssignmentStatement);
+                break;
             case 'FunctionDeclaration':
                 this.visitFunctionDeclaration(node as AST.FunctionDeclaration);
                 break;
@@ -156,6 +159,22 @@ export class AstVisitor {
         const symbol = this.symbolTable.lookup(node.name);
         if (symbol) {
             // Add reference but don't mark as used (assignments are writes, not reads)
+            symbol.references.push(node.range);
+        }
+
+        // Visit the value expression (right-hand side)
+        if (node.value) {
+            this.visit(node.value);
+        }
+    }
+
+    private visitCompoundAssignmentStatement(node: AST.CompoundAssignmentStatement) {
+        // For compound assignments (+=, -=, etc.), the variable is both read and written
+        const symbol = this.symbolTable.lookup(node.name);
+        if (symbol) {
+            // Mark as used because compound assignment reads the current value
+            symbol.used = true;
+            // Add reference
             symbol.references.push(node.range);
         }
 

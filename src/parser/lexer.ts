@@ -24,6 +24,7 @@ export enum TokenType {
 
   // Operators
   ASSIGN = 'ASSIGN',           // =, :=
+  COMPOUND_ASSIGN = 'COMPOUND_ASSIGN', // +=, -=, *=, /=, %=
   PLUS = 'PLUS',               // +
   MINUS = 'MINUS',             // -
   MULTIPLY = 'MULTIPLY',       // *
@@ -93,10 +94,6 @@ const SINGLE_CHAR_TOKENS = new Map<string, TokenType>([
   [',', TokenType.COMMA],
   ['.', TokenType.DOT],
   ['?', TokenType.TERNARY],
-  ['+', TokenType.PLUS],
-  ['-', TokenType.MINUS],
-  ['*', TokenType.MULTIPLY],
-  ['%', TokenType.MODULO],
 ]);
 
 /**
@@ -196,8 +193,47 @@ export class Lexer {
           this.scanComment();
         } else if (this.peek() === '*') {
           this.scanBlockComment();
+        } else if (this.peek() === '=') {
+          this.advance();
+          this.addToken(TokenType.COMPOUND_ASSIGN, '/=', 2);
         } else {
           this.addToken(TokenType.DIVIDE, '/', 1);
+        }
+        break;
+
+      case '+':
+        if (this.peek() === '=') {
+          this.advance();
+          this.addToken(TokenType.COMPOUND_ASSIGN, '+=', 2);
+        } else {
+          this.addToken(TokenType.PLUS, '+', 1);
+        }
+        break;
+
+      case '-':
+        if (this.peek() === '=') {
+          this.advance();
+          this.addToken(TokenType.COMPOUND_ASSIGN, '-=', 2);
+        } else {
+          this.addToken(TokenType.MINUS, '-', 1);
+        }
+        break;
+
+      case '*':
+        if (this.peek() === '=') {
+          this.advance();
+          this.addToken(TokenType.COMPOUND_ASSIGN, '*=', 2);
+        } else {
+          this.addToken(TokenType.MULTIPLY, '*', 1);
+        }
+        break;
+
+      case '%':
+        if (this.peek() === '=') {
+          this.advance();
+          this.addToken(TokenType.COMPOUND_ASSIGN, '%=', 2);
+        } else {
+          this.addToken(TokenType.MODULO, '%', 1);
         }
         break;
 

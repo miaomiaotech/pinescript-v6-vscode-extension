@@ -186,11 +186,29 @@ export class Parser {
         this.current = funcDeclCheckpoint;
     }
 
-    // Check if it's an identifier followed by = or :=
-    if (this.check(TokenType.IDENTIFIER) && this.peekNext()?.type === TokenType.ASSIGN) {
+    // Check if it's an identifier followed by = or := or compound assignment
+    const nextTokenType = this.peekNext()?.type;
+    if (this.check(TokenType.IDENTIFIER) && (nextTokenType === TokenType.ASSIGN || nextTokenType === TokenType.COMPOUND_ASSIGN)) {
       const nameToken = this.peek();
       this.advance(); // consume identifier
-      const assignToken = this.advance(); // consume = or :=
+      const assignToken = this.advance(); // consume = or := or compound assignment
+
+      // If it's a compound assignment (+=, -=, *=, /=, %=)
+      if (assignToken.type === TokenType.COMPOUND_ASSIGN) {
+        const value = this.expression();
+        const endToken = this.previous();
+        return {
+          type: 'CompoundAssignmentStatement',
+          name: nameToken.value,
+          nameLine: nameToken.line,
+          nameColumn: nameToken.column,
+          operator: assignToken.value,
+          value,
+          line: nameToken.line,
+          column: nameToken.column,
+          range: new Range(this.tokenRange(nameToken).start, this.tokenRange(endToken).end),
+        };
+      }
 
       // If it's :=, this is reassignment (not declaration)
       if (assignToken.value === ':=') {

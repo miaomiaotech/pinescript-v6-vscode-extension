@@ -206,6 +206,29 @@ describe('词法器 - 运算符', () => {
     ]);
   });
 
+  test('解析复合赋值运算符', () => {
+    const tokens = getTokens('+= -= *= /= %=');
+    assert.deepStrictEqual(tokens, [
+      { type: TokenType.COMPOUND_ASSIGN, value: '+=' },
+      { type: TokenType.COMPOUND_ASSIGN, value: '-=' },
+      { type: TokenType.COMPOUND_ASSIGN, value: '*=' },
+      { type: TokenType.COMPOUND_ASSIGN, value: '/=' },
+      { type: TokenType.COMPOUND_ASSIGN, value: '%=' },
+      { type: TokenType.EOF, value: '' }
+    ]);
+  });
+
+  test('区分复合赋值和普通运算符', () => {
+    const tokens = getTokens('x + = 1');
+    assert.deepStrictEqual(tokens, [
+      { type: TokenType.IDENTIFIER, value: 'x' },
+      { type: TokenType.PLUS, value: '+' },
+      { type: TokenType.ASSIGN, value: '=' },
+      { type: TokenType.NUMBER, value: '1' },
+      { type: TokenType.EOF, value: '' }
+    ]);
+  });
+
   test('解析箭头运算符', () => {
     const tokens = getTokens('=>');
     assert.deepStrictEqual(tokens, [
@@ -746,5 +769,26 @@ else
     assert.strictEqual(tokens[3].type, TokenType.KEYWORD);
     assert.strictEqual(tokens[4].value, 'not');
     assert.strictEqual(tokens[4].type, TokenType.KEYWORD);
+  });
+
+  test('复合赋值操作', () => {
+    const source = 'var int counter = 0\ncounter += 1';
+    const tokens = getTokens(source);
+
+    // 找到 += 操作符
+    const compoundAssign = tokens.find(t => t.value === '+=');
+    assert.strictEqual(compoundAssign.type, TokenType.COMPOUND_ASSIGN);
+  });
+
+  test('多种复合赋值在循环中', () => {
+    const source = `for i = 0 to 10
+    sum += i
+    product *= 2`;
+    const tokens = getTokens(source);
+
+    const compoundTokens = tokens.filter(t => t.type === TokenType.COMPOUND_ASSIGN);
+    assert.strictEqual(compoundTokens.length, 2);
+    assert.strictEqual(compoundTokens[0].value, '+=');
+    assert.strictEqual(compoundTokens[1].value, '*=');
   });
 });

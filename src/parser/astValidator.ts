@@ -564,6 +564,26 @@ export class AstValidator {
         this.validateExpression(statement.value);
         break;
 
+      case 'CompoundAssignmentStatement':
+        // Check that variable exists
+        const compoundSymbol = this.symbolTable.lookup(statement.name);
+        if (!compoundSymbol) {
+          this.addError(
+            statement.nameLine,
+            statement.nameColumn,
+            statement.name.length,
+            `Undefined variable '${statement.name}'`,
+            DiagnosticSeverity.Error
+          );
+        } else {
+          // Mark as used because compound assignment reads the current value
+          compoundSymbol.used = true;
+          compoundSymbol.references.push(statement.range);
+        }
+        // Validate the value expression
+        this.validateExpression(statement.value);
+        break;
+
       case 'ExpressionStatement':
         this.validateExpression(statement.expression);
         break;

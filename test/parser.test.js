@@ -56,7 +56,7 @@ function simplifyNode(node) {
   return simplified;
 }
 
-describe('AST 解析器 - 变量声明', () => {
+describe('AST 解析器 - 变量声明和赋值', () => {
   test('简单变量声明', () => {
     const ast = parse('x = 10');
     const simplified = simplifyNode(ast);
@@ -130,6 +130,71 @@ describe('AST 解析器 - 变量声明', () => {
     const varDecl = simplified.body[0];
     assert.strictEqual(varDecl.init.type, 'Literal');
     assert.strictEqual(varDecl.init.value, '"Pine Script"');
+  });
+
+  test('复合赋值语句 - 加法', () => {
+    const source = `var int counter = 0
+counter += 1`;
+    const ast = parse(source);
+    const simplified = simplifyNode(ast);
+
+    assert.strictEqual(simplified.body.length, 2);
+    const compoundStmt = simplified.body[1];
+    assert.strictEqual(compoundStmt.type, 'CompoundAssignmentStatement');
+    assert.strictEqual(compoundStmt.name, 'counter');
+    assert.strictEqual(compoundStmt.operator, '+=');
+    assert.strictEqual(compoundStmt.value.type, 'Literal');
+    assert.strictEqual(compoundStmt.value.value, 1);
+  });
+
+  test('复合赋值语句 - 减法', () => {
+    const source = `var float balance = 100.0
+balance -= 10.5`;
+    const ast = parse(source);
+    const simplified = simplifyNode(ast);
+
+    const compoundStmt = simplified.body[1];
+    assert.strictEqual(compoundStmt.type, 'CompoundAssignmentStatement');
+    assert.strictEqual(compoundStmt.operator, '-=');
+    assert.strictEqual(compoundStmt.value.value, 10.5);
+  });
+
+  test('复合赋值语句 - 乘法', () => {
+    const ast = parse('multiplier *= 2');
+    const simplified = simplifyNode(ast);
+
+    const compoundStmt = simplified.body[0];
+    assert.strictEqual(compoundStmt.type, 'CompoundAssignmentStatement');
+    assert.strictEqual(compoundStmt.operator, '*=');
+    assert.strictEqual(compoundStmt.name, 'multiplier');
+  });
+
+  test('复合赋值语句 - 除法', () => {
+    const ast = parse('divisor /= 4.0');
+    const simplified = simplifyNode(ast);
+
+    const compoundStmt = simplified.body[0];
+    assert.strictEqual(compoundStmt.type, 'CompoundAssignmentStatement');
+    assert.strictEqual(compoundStmt.operator, '/=');
+  });
+
+  test('复合赋值语句 - 模运算', () => {
+    const ast = parse('remainder %= 3');
+    const simplified = simplifyNode(ast);
+
+    const compoundStmt = simplified.body[0];
+    assert.strictEqual(compoundStmt.type, 'CompoundAssignmentStatement');
+    assert.strictEqual(compoundStmt.operator, '%=');
+  });
+
+  test('复合赋值带表达式', () => {
+    const ast = parse('sum += close - open');
+    const simplified = simplifyNode(ast);
+
+    const compoundStmt = simplified.body[0];
+    assert.strictEqual(compoundStmt.type, 'CompoundAssignmentStatement');
+    assert.strictEqual(compoundStmt.value.type, 'BinaryExpression');
+    assert.strictEqual(compoundStmt.value.operator, '-');
   });
 });
 
@@ -475,7 +540,7 @@ sum := sum + close`;
     assert.strictEqual(simplified.body.length, 3);
     assert.strictEqual(simplified.body[0].type, 'ExpressionStatement');
     assert.strictEqual(simplified.body[1].type, 'VariableDeclaration');
-    assert.strictEqual(simplified.body[2].type, 'VariableDeclaration');
+    assert.strictEqual(simplified.body[2].type, 'AssignmentStatement'); // := 是重新赋值，不是声明
   });
 
   test('带条件的 plot 语句', () => {

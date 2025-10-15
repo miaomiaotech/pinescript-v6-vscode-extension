@@ -22,7 +22,7 @@
 
 ## 安装
 
-1.  从 [GitHub Releases](https://github.com/miaomiaotech/pinescript-v6-vscode-extension/releases) 页面下载最新的 `.vsix` 文件。
+1.  从 [Releases](https://github.com/miaomiaotech/pinescript-v6-vscode-extension/releases) 页面下载最新的 `.vsix` 文件。
 2.  打开 VS Code。
 3.  选择 **查看 > 扩展** (或 `Ctrl+Shift+X`)。
 4.  点击扩展视图顶部的 `...` 菜单，然后选择 **从 VSIX 安装...**。

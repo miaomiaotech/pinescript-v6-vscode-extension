@@ -17,6 +17,7 @@ export type Statement =
   | VariableDeclaration
   | DestructuringAssignment
   | AssignmentStatement
+  | CompoundAssignmentStatement
   | FunctionDeclaration
   | ExpressionStatement
   | IfStatement
@@ -52,6 +53,15 @@ export interface AssignmentStatement extends ASTNode {
   name: string; // Variable name being assigned
   nameLine: number;
   nameColumn: number;
+  value: Expression; // Right-hand side expression
+}
+
+export interface CompoundAssignmentStatement extends ASTNode {
+  type: 'CompoundAssignmentStatement';
+  name: string; // Variable name being assigned
+  nameLine: number;
+  nameColumn: number;
+  operator: string; // +=, -=, *=, /=, %=
   value: Expression; // Right-hand side expression
 }
 
