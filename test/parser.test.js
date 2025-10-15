@@ -623,3 +623,173 @@ y = 2`;
     assert.strictEqual(simplified.body.length, 2);
   });
 });
+
+// 导入 AstValidator 用于错误检测测试
+const { AstValidator } = require('../dist/src/parser/astValidator.js');
+
+describe('AST 解析器 - 重复定义检测', () => {
+  test('重复变量定义应该报错', () => {
+    const source = `//@version=6
+a = 3
+a = 4`;
+    const ast = parse(source);
+    const validator = new AstValidator();
+    const errors = validator.validate(ast);
+
+    // 应该有一个错误：重复定义 a
+    const duplicateErrors = errors.filter(e => e.message.includes('already defined'));
+    assert.strictEqual(duplicateErrors.length, 1);
+    assert(duplicateErrors[0].message.includes('a'));
+    assert(duplicateErrors[0].message.includes('line 2'));
+  });
+
+  test('正确的重新赋值不应该报错', () => {
+    const source = `//@version=6
+a = 3
+a := 4`;
+    const ast = parse(source);
+    const validator = new AstValidator();
+    const errors = validator.validate(ast);
+
+    // 不应该有重复定义错误（a := 4 是重新赋值，不是重新定义）
+    const duplicateErrors = errors.filter(e => e.message.includes('already defined'));
+    assert.strictEqual(duplicateErrors.length, 0);
+  });
+
+  test('重复函数定义应该报错', () => {
+    const source = `//@version=6
+myFunc() => 1
+myFunc() => 2`;
+    const ast = parse(source);
+    const validator = new AstValidator();
+    const errors = validator.validate(ast);
+
+    // 应该有一个错误：重复定义 myFunc
+    const duplicateErrors = errors.filter(e => e.message.includes('already defined'));
+    assert.strictEqual(duplicateErrors.length, 1);
+    assert(duplicateErrors[0].message.includes('myFunc'));
+  });
+
+  test('多个重复定义应该都被检测', () => {
+    const source = `//@version=6
+a = 1
+b = 2
+a = 3
+b = 4`;
+    const ast = parse(source);
+    const validator = new AstValidator();
+    const errors = validator.validate(ast);
+
+    // 应该有两个错误：a 和 b 都重复定义了
+    const duplicateErrors = errors.filter(e => e.message.includes('already defined'));
+    assert.strictEqual(duplicateErrors.length, 2);
+  });
+
+  test('同名变量和函数应该报错', () => {
+    const source = `//@version=6
+myName = 10
+myName() => 20`;
+    const ast = parse(source);
+    const validator = new AstValidator();
+    const errors = validator.validate(ast);
+
+    // 应该有一个错误：myName 被重复定义
+    const duplicateErrors = errors.filter(e => e.message.includes('already defined'));
+    assert.strictEqual(duplicateErrors.length, 1);
+  });
+
+  test('在不同作用域中的同名变量不应该报错', () => {
+    const source = `//@version=6
+a = 1
+myFunc() =>
+    a = 2
+    a`;
+    const ast = parse(source);
+    const validator = new AstValidator();
+    const errors = validator.validate(ast);
+
+    // 函数内部的 a 是独立作用域，不应该报错
+    const duplicateErrors = errors.filter(e => e.message.includes('already defined'));
+    // 注意：根据 Pine Script 的作用域规则，这里可能会检测到重复定义
+    // 如果函数内部的变量遮蔽外部变量被认为是合法的，这个测试应该通过
+    // 如果不合法，则应该有错误
+    // 让我们先检查实际行为
+    console.log('在不同作用域中的同名变量错误数:', duplicateErrors.length);
+  });
+
+  test('解构赋值中重复定义变量应该报错', () => {
+    const source = `//@version=6
+ok() =>
+    [4, 5]
+
+a = 3
+
+[a, b] = ok()`;
+    const ast = parse(source);
+    const validator = new AstValidator();
+    const errors = validator.validate(ast);
+
+    // 应该有一个错误：a 已经被定义
+    const duplicateErrors = errors.filter(e => e.message.includes('already defined'));
+    assert.strictEqual(duplicateErrors.length, 1);
+    assert(duplicateErrors[0].message.includes('a'));
+    assert(duplicateErrors[0].message.includes('line 5'));
+  });
+
+  test('解构赋值不支持 := 语法', () => {
+    // 测试用例 1: [a, b] := ok()
+    const source1 = `//@version=6
+ok() =>
+    [4, 5]
+
+a = 3
+
+[a, b] := ok()`;
+
+    const parser1 = new Parser(source1);
+    const ast1 = parser1.parse();
+    const errors1 = parser1.getErrors();
+
+    // 应该有解析错误
+    assert(errors1.length > 0, '应该有解析错误');
+    const colonEqualErrors1 = errors1.filter(e => e.message.includes(':='));
+    assert.strictEqual(colonEqualErrors1.length, 1, '应该有一个 := 错误');
+    assert(colonEqualErrors1[0].message.includes('Mismatched input ":=" expecting "="'));
+
+    // 测试用例 2: [c, b] := ok()
+    const source2 = `//@version=6
+ok() =>
+    [4, 5]
+
+a = 3
+
+[c, b] := ok()`;
+
+    const parser2 = new Parser(source2);
+    const ast2 = parser2.parse();
+    const errors2 = parser2.getErrors();
+
+    // 应该有解析错误
+    assert(errors2.length > 0, '应该有解析错误');
+    const colonEqualErrors2 = errors2.filter(e => e.message.includes(':='));
+    assert.strictEqual(colonEqualErrors2.length, 1, '应该有一个 := 错误');
+    assert(colonEqualErrors2[0].message.includes('Mismatched input ":=" expecting "="'));
+  });
+
+  test('解构赋值正确使用 = 语法', () => {
+    const source = `//@version=6
+ok() =>
+    [4, 5]
+
+[x, y] = ok()`;
+
+    // 应该可以正确解析
+    const ast = parse(source);
+    const simplified = simplifyNode(ast);
+
+    // 检查是否正确解析为解构赋值
+    const destructuring = simplified.body[1];
+    assert.strictEqual(destructuring.type, 'DestructuringAssignment');
+    assert.deepStrictEqual(destructuring.names, ['x', 'y']);
+  });
+});

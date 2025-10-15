@@ -433,7 +433,17 @@ export class AstValidator {
         symbol.type = initType;
       }
 
-      this.symbolTable.define(symbol);
+      // Check for duplicate definition
+      const existing = this.symbolTable.define(symbol);
+      if (existing) {
+        this.addError(
+          statement.nameLine,
+          statement.nameColumn,
+          statement.name.length,
+          `Variable '${statement.name}' is already defined at line ${existing.line}`,
+          DiagnosticSeverity.Error
+        );
+      }
     } else if (statement.type === 'DestructuringAssignment') {
       // Handle destructuring assignment: [a, b] = expr
       // Try to infer the type of the expression being destructured
@@ -497,7 +507,17 @@ export class AstValidator {
           references: [],
         };
 
-        this.symbolTable.define(symbol);
+        // Check for duplicate definition
+        const existing = this.symbolTable.define(symbol);
+        if (existing) {
+          this.addError(
+            variable.line,
+            variable.column,
+            variable.name.length,
+            `Variable '${variable.name}' is already defined at line ${existing.line}`,
+            DiagnosticSeverity.Error
+          );
+        }
       }
     } else if (statement.type === 'FunctionDeclaration') {
       // Save function declaration for later analysis
@@ -517,7 +537,17 @@ export class AstValidator {
         references: [],
       };
 
-      this.symbolTable.define(symbol);
+      // Check for duplicate definition
+      const existing = this.symbolTable.define(symbol);
+      if (existing) {
+        this.addError(
+          statement.line,
+          statement.column,
+          statement.name.length,
+          `Function '${statement.name}' is already defined at line ${existing.line}`,
+          DiagnosticSeverity.Error
+        );
+      }
     } else if (statement.type === 'IfStatement') {
       // Recurse into bodies to find declarations
       for (const stmt of statement.consequent) {

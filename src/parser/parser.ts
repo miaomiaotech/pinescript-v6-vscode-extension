@@ -261,8 +261,17 @@ export class Parser {
 
         this.consume(TokenType.RBRACKET, 'Expected "]" in destructuring pattern');
 
-        // Check for = after the pattern
-        if (this.match(TokenType.ASSIGN)) {
+        // Check for = after the pattern (NOT :=, only =)
+        if (this.check(TokenType.ASSIGN)) {
+          const assignToken = this.advance();
+          // Destructuring assignment only supports =, not :=
+          if (assignToken.value !== '=') {
+            // This is a syntax error, don't backtrack
+            const errorMsg = `Mismatched input ":=" expecting "=" at line ${assignToken.line}`;
+            this.reportError(errorMsg, assignToken);
+            // Still try to parse as destructuring assignment to continue error checking
+            return this.destructuringAssignment(names, variables, startToken);
+          }
           // This is a destructuring assignment!
           return this.destructuringAssignment(names, variables, startToken);
         }

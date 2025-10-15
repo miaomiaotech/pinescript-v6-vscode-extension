@@ -22,8 +22,15 @@ export class Scope {
     this.parent = parent;
   }
 
-  define(symbol: Symbol): void {
+  define(symbol: Symbol): Symbol | null {
+    // Check if symbol already exists in current scope
+    const existing = this.symbols.get(symbol.name);
+    if (existing) {
+      // Return the existing symbol to indicate duplicate definition
+      return existing;
+    }
     this.symbols.set(symbol.name, symbol);
+    return null;
   }
 
   lookup(name: string): Symbol | undefined {
@@ -225,8 +232,8 @@ export class SymbolTable {
     }
   }
 
-  define(symbol: Symbol): void {
-    this.currentScope.define(symbol);
+  define(symbol: Symbol): Symbol | null {
+    return this.currentScope.define(symbol);
   }
 
   lookup(name: string): Symbol | undefined {
