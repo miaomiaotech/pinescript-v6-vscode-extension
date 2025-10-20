@@ -1,6 +1,4 @@
 import * as vscode from 'vscode';
-import * as http from 'http';
-import * as https from 'https';
 import {
   getAllCompletions,
   getNamespaceCompletions,
@@ -88,49 +86,7 @@ export function activate(context: vscode.ExtensionContext) {
           }
 
           // Return all completions (includes built-ins, keywords, and namespace hints)
-          const items = getAllCompletions();
-
-          // Optional HTTP suggestions
-          const cfg = vscode.workspace.getConfiguration();
-          const enabled = cfg.get<boolean>('pine.httpSuggestions.enabled', false);
-          const endpoint = cfg.get<string>('pine.httpSuggestions.endpoint', '');
-          const timeoutMs = cfg.get<number>('pine.httpSuggestions.timeoutMs', 1200);
-
-          if (!enabled || !endpoint) {
-            return items;
-          }
-
-          return new Promise<vscode.CompletionItem[]>((resolve) => {
-            try {
-              const client = /^https:/i.test(endpoint) ? https : http;
-              const req = client.request(endpoint, { method: 'POST', timeout: timeoutMs, headers: { 'Content-Type': 'application/json' } }, res => {
-                const chunks: Buffer[] = [];
-                res.on('data', c => chunks.push(Buffer.from(c)));
-                res.on('end', () => {
-                  try {
-                    const body = Buffer.concat(chunks).toString('utf8');
-                    const parsed = JSON.parse(body) as { suggestions?: string[] };
-                    const extra = (parsed.suggestions || []).slice(0, 20).map(s => new vscode.CompletionItem(s, vscode.CompletionItemKind.Snippet));
-                    resolve([...items, ...extra]);
-                  } catch {
-                    resolve(items);
-                  }
-                });
-              });
-              const wordPrefix = document.getWordRangeAtPosition(position);
-              const prefixText = wordPrefix ? document.getText(wordPrefix) : '';
-              const payload = JSON.stringify({
-                documentText: document.getText(),
-                position: { line: position.line, character: position.character },
-                prefix: prefixText
-              });
-              req.on('error', () => resolve(items));
-              req.write(payload);
-              req.end();
-            } catch {
-              resolve(items);
-            }
-          });
+          return getAllCompletions();
         }
       },
       '.' // trigger on dot

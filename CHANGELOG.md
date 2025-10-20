@@ -41,6 +41,3 @@
 
 ### 配置
 - `pine.applyFileAssociation` - 自动关联 .pine 文件类型
-- `pine.httpSuggestions.enabled` - 启用 HTTP AI 补全钩子
-- `pine.httpSuggestions.endpoint` - AI 补全端点
-- `pine.httpSuggestions.timeoutMs` - 请求超时设置

@@ -45,9 +45,6 @@
 
 *   `pine.applyFileAssociation`: 激活时，确保 `files.associations` 将 `*.pine` 映射到 pine 语言 (默认: `true`)。
 *   `pine.inlayHints.enabled`: 在变量声明旁显示推断的类型作为嵌入提示 (默认: `true`)。
-*   `pine.httpSuggestions.enabled`: 启用 HTTP 建议钩子以用于 AI 补全 (默认: `false`)。
-*   `pine.httpSuggestions.endpoint`: 建议提供程序的 HTTP(S) 端点 (默认: `https://localhost:11434/suggest`)。
-*   `pine.httpSuggestions.timeoutMs`: 请求超时时间（毫秒）(默认: `1200`)。
 
 ### 开发
 

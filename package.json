@@ -66,21 +66,6 @@
           "default": true,
           "description": "On activation, ensure files.associations maps *.pine to the pine language."
         },
-        "pine.httpSuggestions.enabled": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable HTTP suggestion hook for AI completions."
-        },
-        "pine.httpSuggestions.endpoint": {
-          "type": "string",
-          "default": "https://localhost:11434/suggest",
-          "description": "HTTP(S) endpoint for suggestion provider."
-        },
-        "pine.httpSuggestions.timeoutMs": {
-          "type": "number",
-          "default": 1200,
-          "description": "Request timeout in milliseconds."
-        },
         "pine.inlayHints.enabled": {
           "type": "boolean",
           "default": true,
