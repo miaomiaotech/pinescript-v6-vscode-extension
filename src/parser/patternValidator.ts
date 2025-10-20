@@ -5,7 +5,7 @@
  */
 
 import * as vscode from 'vscode';
-import { PINE_FUNCTIONS_MERGED as ALL_FUNCTION_SIGNATURES } from '../../v6/parameter-requirements-merged';
+import { PINE_FUNCTIONS_MERGED as ALL_FUNCTION_SIGNATURES } from '../../v6/functions';
 import { isValidNamespaceMember, CONSTANT_NAMESPACES } from '../../v6/pine-constants-complete';
 import {
   VARIABLE_NAMESPACES,

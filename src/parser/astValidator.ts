@@ -1,8 +1,8 @@
 // AST-based Pine Script Validator with Type Checking and Scope Analysis
 import { Program, Statement, Expression, CallExpression, CallArgument, Identifier, Literal } from './ast';
 import { V6_FUNCTIONS, V6_NAMESPACES, PineItem } from '../../v6/v6-manual';
-import { PINE_FUNCTIONS_MERGED } from '../../v6/parameter-requirements-merged';
-import type { FunctionSignatureSpec, FunctionParameter } from '../../v6/parameter-requirements-generated';
+import { PINE_FUNCTIONS_MERGED } from '../../v6/functions';
+import type { FunctionSignatureSpec, FunctionParameter, FunctionOverload } from '../../v6/functions';
 import { PineType, TypeChecker } from './typeSystem';
 import { SymbolTable, Symbol as SymbolInfo } from './symbolTable';
 
@@ -877,6 +877,20 @@ export class AstValidator {
       }
     }
 
+    // Check if function has overloads
+    const spec = PINE_FUNCTIONS_MERGED[functionName];
+    if (spec && spec.overloads && spec.overloads.length > 0) {
+      // Try to match against all overloads
+      const result = this.tryMatchOverloads(call, functionName, spec.overloads, providedArgs, positionalArgs);
+      if (!result.matched) {
+        // Report errors from the best matching overload
+        for (const error of result.errors) {
+          this.addError(error.line, error.column, error.length, error.message, error.severity);
+        }
+      }
+      return;
+    }
+
     // Check argument count
     const totalCount = signature.parameters.length;
 
@@ -976,6 +990,122 @@ export class AstValidator {
 
     // Special case validations
     this.validateSpecialCases(call, functionName, args);
+  }
+
+  /**
+   * 尝试匹配所有函数重载
+   * 返回第一个匹配的重载，或所有重载都不匹配时返回最佳匹配的错误信息
+   */
+  private tryMatchOverloads(
+    call: CallExpression,
+    functionName: string,
+    overloads: FunctionOverload[],
+    providedArgs: Map<string, { arg: CallArgument; type: PineType }>,
+    positionalArgs: { arg: CallArgument; type: PineType }[]
+  ): { matched: boolean; errors: Array<{ line: number; column: number; length: number; message: string; severity: DiagnosticSeverity }> } {
+
+    interface OverloadMatchResult {
+      overload: FunctionOverload;
+      errors: Array<{ line: number; column: number; length: number; message: string; severity: DiagnosticSeverity }>;
+      score: number; // 匹配分数，越低越好
+    }
+
+    const results: OverloadMatchResult[] = [];
+
+    // 尝试每个重载
+    for (const overload of overloads) {
+      const errors: Array<{ line: number; column: number; length: number; message: string; severity: DiagnosticSeverity }> = [];
+      let score = 0;
+
+      // 构建参数列表
+      const allParams = [
+        ...overload.requiredParams.map(name => ({ name, optional: false })),
+        ...overload.optionalParams.map(name => ({ name, optional: true }))
+      ];
+
+      // 检查参数数量
+      const providedCount = positionalArgs.length + providedArgs.size;
+      const requiredCount = overload.requiredParams.length;
+      const maxCount = allParams.length;
+
+      if (positionalArgs.length > maxCount) {
+        errors.push({
+          line: call.line,
+          column: call.column,
+          length: functionName.length,
+          message: `Too many arguments for '${functionName}'. Expected ${maxCount}, got ${positionalArgs.length}`,
+          severity: DiagnosticSeverity.Error
+        });
+        score += 100; // 严重错误
+      }
+
+      // 检查每个参数
+      for (let i = 0; i < allParams.length; i++) {
+        const param = allParams[i];
+
+        // 检查命名参数
+        const namedArg = providedArgs.get(param.name);
+        if (namedArg) {
+          continue; // 命名参数提供了
+        }
+
+        // 检查位置参数
+        if (i < positionalArgs.length) {
+          continue; // 位置参数提供了
+        }
+
+        // 参数未提供
+        if (!param.optional) {
+          errors.push({
+            line: call.line,
+            column: call.column,
+            length: functionName.length,
+            message: `Missing required parameter '${param.name}' for function '${functionName}'`,
+            severity: DiagnosticSeverity.Error
+          });
+          score += 10; // 缺少必需参数
+        }
+      }
+
+      // 检查无效的命名参数
+      for (const [name] of providedArgs.entries()) {
+        if (!allParams.some(p => p.name === name)) {
+          errors.push({
+            line: call.line,
+            column: call.column,
+            length: name.length,
+            message: `Invalid parameter '${name}' for this overload`,
+            severity: DiagnosticSeverity.Error
+          });
+          score += 5; // 无效参数
+        }
+      }
+
+      results.push({ overload, errors, score });
+
+      // 如果找到完美匹配，立即返回
+      if (errors.length === 0) {
+        return { matched: true, errors: [] };
+      }
+    }
+
+    // 没有完美匹配，返回最佳匹配的错误
+    results.sort((a, b) => a.score - b.score);
+    const bestMatch = results[0];
+
+    // 如果有多个重载，在错误消息中提示所有可能的签名
+    if (overloads.length > 1 && bestMatch.errors.length > 0) {
+      const signatures = overloads.map(o => o.signature).join('\n  ');
+      bestMatch.errors.push({
+        line: call.line,
+        column: call.column,
+        length: functionName.length,
+        message: `Available overloads:\n  ${signatures}`,
+        severity: DiagnosticSeverity.Information
+      });
+    }
+
+    return { matched: false, errors: bestMatch.errors };
   }
 
   private validateSpecialCases(

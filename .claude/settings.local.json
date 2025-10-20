@@ -5,7 +5,9 @@
       "Bash(npm run test:lexer:*)",
       "Bash(npm run test:parser:*)",
       "Bash(npm run build:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(npm test)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []
